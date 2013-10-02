@@ -26,4 +26,7 @@ ATTRS{serial}=="1234567890ABCDEF", ENV{ID_SERIAL_SHORT}=""
 ATTRS{idVendor}=="0421", ATTRS{idProduct}=="023e", ENV{OFONO_DRIVER}="nokiacdma"
 ATTRS{idVendor}=="0421", ATTRS{idProduct}=="00b6", ENV{OFONO_DRIVER}="nokiacdma"
 
+# Lenovo H5321gw 0bdb:1926
+ATTRS{idVendor}=="0bdb", ATTRS{idProduct}=="1926", ENV{OFONO_DRIVER}="mbm"
+
 LABEL="ofono_end"

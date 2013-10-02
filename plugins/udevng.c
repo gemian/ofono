@@ -51,6 +51,7 @@ struct modem_info {
 struct device_info {
 	char *devpath;
 	char *devnode;
+	char *devtype;
 	char *interface;
 	char *number;
 	char *label;
@@ -118,7 +119,8 @@ static gboolean setup_mbm(struct modem_info *modem)
 		} else if (g_str_has_suffix(info->sysattr,
 						"Network Adapter") == TRUE ||
 				g_str_has_suffix(info->sysattr,
-						"NetworkAdapter") == TRUE) {
+						"NetworkAdapter") == TRUE ||
+				g_strcmp0(info->devtype, "wwan") == 0) {
 			network = info->devnode;
 		}
 	}
@@ -877,7 +879,7 @@ static void add_device(const char *syspath, const char *devname,
 			const char *model, struct udev_device *device)
 {
 	struct udev_device *intf;
-	const char *devpath, *devnode, *interface, *number, *label, *sysattr;
+	const char *devpath, *devnode, *devtype, *interface, *number, *label, *sysattr;
 	struct modem_info *modem;
 	struct device_info *info;
 
@@ -924,9 +926,11 @@ static void add_device(const char *syspath, const char *devname,
 	else
 		sysattr = NULL;
 
+	devtype = udev_device_get_devtype(device);
+
 	DBG("%s", syspath);
 	DBG("%s", devpath);
-	DBG("%s (%s) %s [%s] ==> %s %s", devnode, driver,
+	DBG("%s: %s (%s) %s [%s] ==> %s %s", devtype, devnode, driver,
 					interface, number, label, sysattr);
 
 	info = g_try_new0(struct device_info, 1);
@@ -935,6 +939,7 @@ static void add_device(const char *syspath, const char *devname,
 
 	info->devpath = g_strdup(devpath);
 	info->devnode = g_strdup(devnode);
+	info->devtype = g_strdup(devtype);
 	info->interface = g_strdup(interface);
 	info->number = g_strdup(number);
 	info->label = g_strdup(label);
