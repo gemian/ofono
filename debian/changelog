@@ -1,4 +1,4 @@
-ofono (1.12+bzr-0ubuntu1) UNRELEASED; urgency=low
+ofono (1.12+bzr6836-0ubuntu1) saucy; urgency=low
 
   [ Ricardo Salveti de Araujo ]
   * Changing packaging tree to make it part of the daily CI jobs
@@ -16,7 +16,7 @@ ofono (1.12+bzr-0ubuntu1) UNRELEASED; urgency=low
   * Make the package use bzr-builddeb split-mode to properly build the source
     tarball.
 
- -- Mathieu Trudel-Lapierre <mathieu-tl@ubuntu.com>  Tue, 08 Oct 2013 10:31:39 -0400
+ -- Mathieu Trudel-Lapierre <mathieu-tl@ubuntu.com>  Tue, 08 Oct 2013 10:47:02 -0400
 
 ofono (1.12-0ubuntu8) saucy; urgency=low
 
