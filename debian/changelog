@@ -1,11 +1,22 @@
-ofono (1.12+bzr-0ubuntu1) UNRELEASED; urgency=low
+ofono (1.12+bzr6836-0ubuntu1) saucy; urgency=low
 
+  [ Ricardo Salveti de Araujo ]
   * Changing packaging tree to make it part of the daily CI jobs
     - Changing source format to 1.0 (required by CI)
     - Creating bzr bd compatible branch, with the same content as available in
       the previous package
 
- -- Ricardo Salveti de Araujo <ricardo.salveti@canonical.com>  Wed, 02 Oct 2013 12:19:35 -0300
+  [ Tony Espy ]
+  - Ensure that *netreg_data is always set in callback data (LP: #1234491)
+  - Re-factor rilmodem initialization code to enable set online/offline
+    (LP: #1210502)
+  - Fixing parcel parsing when probing for mute.
+
+  [ Mathieu Trudel-Lapierre ]
+  * Make the package use bzr-builddeb split-mode to properly build the source
+    tarball.
+
+ -- Mathieu Trudel-Lapierre <mathieu-tl@ubuntu.com>  Tue, 08 Oct 2013 10:47:02 -0400
 
 ofono (1.12-0ubuntu8) saucy; urgency=low
 
