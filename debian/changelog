@@ -1,3 +1,23 @@
+ofono (1.12+bzr6839-0ubuntu1) saucy; urgency=low
+
+  [ Tony Espy ]
+  * rilmodem: Fix GPRS attach/detach logic (LP: #1234434)
+
+ -- Ricardo Salveti de Araujo <ricardo.salveti@canonical.com>  Wed, 16 Oct 2013 11:30:48 -0300
+
+ofono (1.12+bzr6837-0ubuntu1) saucy; urgency=low
+
+  [ Alfonso Sanchez-Beato ]
+  * Fix for LP: #1231320: GPRS provisioning is broken for old
+    (non-USIM) SIM cards in Ubuntu
+  * Fix for LP: #1222106: ofono is picking the wrong APN settings
+    in Ubuntu
+
+  [ Tony Espy ]
+  * Fix crash in ril_query_passwd_state() (LP: #1231995).
+
+ -- Ricardo Salveti de Araujo <ricardo.salveti@canonical.com>  Sun, 13 Oct 2013 18:14:48 -0300
+
 ofono (1.12+bzr6836-0ubuntu1) saucy; urgency=low
 
   [ Ricardo Salveti de Araujo ]
