@@ -1,3 +1,10 @@
+ofono (1.12+bzr6840-0ubuntu1) UNRELEASED; urgency=low
+
+  [ Mikko Hurskainen ]
+  * gril / rilmodem / plugins/ril: fix compilation issues/warnings
+
+ -- Ricardo Salveti de Araujo <ricardo.salveti@canonical.com>  Tue, 05 Nov 2013 15:26:53 -0200
+
 ofono (1.12+bzr6839-0ubuntu1) saucy; urgency=low
 
   [ Tony Espy ]
