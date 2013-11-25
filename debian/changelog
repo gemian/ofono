@@ -1,4 +1,4 @@
-ofono (1.12+bzr6840-0ubuntu1) UNRELEASED; urgency=low
+ofono (1.12+bzr6842-0ubuntu1) trusty; urgency=low
 
   [ Mikko Hurskainen ]
   * gril / rilmodem / plugins/ril: fix compilation issues/warnings
@@ -12,7 +12,7 @@ ofono (1.12+bzr6840-0ubuntu1) UNRELEASED; urgency=low
     - re-factor parcel code
     - add SIM parcel unit tests
 
- -- Tony Espy <espy@canonical.com>  Wed, 06 Nov 2013 13:51:09 -0500
+ -- Ricardo Salveti de Araujo <ricardo.salveti@canonical.com>  Mon, 25 Nov 2013 14:09:33 -0200
 
 ofono (1.12+bzr6839-0ubuntu1) saucy; urgency=low
 
