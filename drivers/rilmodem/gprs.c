@@ -211,7 +211,7 @@ static void ril_data_reg_cb(struct ril_msg *message, gpointer user_data)
 			gd->max_cids = 1;
 
 		DBG("Setting max cids to %d", reply->max_cids);
-		ofono_gprs_set_cid_range(gprs, 1, reply->max_cids);
+		ofono_gprs_set_cid_range(gprs, 1, gd->max_cids);
 
 		/*
 		 * This callback is a result of the inital call
