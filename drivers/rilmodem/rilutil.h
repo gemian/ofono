@@ -106,9 +106,6 @@ void ril_util_sim_state_query_free(struct ril_util_sim_state_query *req);
 
 GSList *ril_util_parse_clcc(GRil *gril, struct ril_msg *message);
 
-gboolean ril_util_parse_reg(GRil *gril, struct ril_msg *message, int *status,
-				int *lac, int *ci, int *tech, int *max_calls);
-
 gint ril_util_parse_sms_response(GRil *gril, struct ril_msg *message);
 
 gint ril_util_get_signal(GRil *gril, struct ril_msg *message);
@@ -119,13 +116,14 @@ struct cb_data {
 	void *user;
 };
 
-static inline struct cb_data *cb_data_new(void *cb, void *data)
+static inline struct cb_data *cb_data_new(void *cb, void *data, void *user)
 {
 	struct cb_data *ret;
 
 	ret = g_new0(struct cb_data, 1);
 	ret->cb = cb;
 	ret->data = data;
+	ret->user = user;
 
 	return ret;
 }

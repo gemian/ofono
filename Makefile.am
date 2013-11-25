@@ -18,7 +18,8 @@ pkginclude_HEADERS = include/log.h include/plugin.h include/history.h \
 			include/location-reporting.h \
 			include/cdma-connman.h include/gnss.h \
 			include/private-network.h include/cdma-netreg.h \
-			include/cdma-provision.h include/handsfree.h
+			include/cdma-provision.h include/handsfree.h \
+			include/sim-mnclength.h
 
 nodist_pkginclude_HEADERS = include/version.h
 
@@ -483,6 +484,9 @@ builtin_sources += plugins/provision.c
 
 builtin_modules += cdma_provision
 builtin_sources += plugins/cdma-provision.c
+
+builtin_modules += mnclength
+builtin_sources += plugins/mnclength.c
 endif
 
 if MAINTAINER_MODE
@@ -536,7 +540,8 @@ src_ofonod_SOURCES = $(gdbus_sources) $(builtin_sources) src/ofono.ver \
 			src/gnssagent.c src/gnssagent.h \
 			src/cdma-smsutil.h src/cdma-smsutil.c \
 			src/cdma-sms.c src/private-network.c src/cdma-netreg.c \
-			src/cdma-provision.c src/handsfree.c
+			src/cdma-provision.c src/handsfree.c \
+			src/sim-mnclength.c
 
 src_ofonod_LDADD = $(builtin_libadd) @GLIB_LIBS@ @DBUS_LIBS@ -ldl
 
@@ -744,17 +749,20 @@ unit_test_caif_LDADD = @GLIB_LIBS@
 unit_objects += $(unit_test_caif_OBJECTS)
 
 unit_test_grilrequest_SOURCES = unit/test-grilrequest.c $(gril_sources) \
-				src/log.c src/util.c src/simutil.c gatchat/ringbuffer.c
+				src/log.c src/util.c src/simutil.c \
+				src/common.c gatchat/ringbuffer.c
 unit_test_grilrequest_LDADD = @GLIB_LIBS@ -ldl
 unit_objects += $(unit_test_grilrequest_OBJECTS)
 
 unit_test_grilreply_SOURCES = unit/test-grilreply.c $(gril_sources) \
-				src/log.c src/util.c src/simutil.c gatchat/ringbuffer.c
+				src/log.c src/util.c src/simutil.c \
+				src/common.c gatchat/ringbuffer.c
 unit_test_grilreply_LDADD = @GLIB_LIBS@ -ldl
 unit_objects += $(unit_test_grilreply_OBJECTS)
 
 unit_test_grilunsol_SOURCES = unit/test-grilunsol.c $(gril_sources) \
-				src/log.c src/util.c src/simutil.c gatchat/ringbuffer.c
+				src/log.c src/util.c src/simutil.c \
+				src/common.c gatchat/ringbuffer.c
 unit_test_grilunsol_LDADD = @GLIB_LIBS@ -ldl
 unit_objects += $(unit_test_grilunsol_OBJECTS)
 
