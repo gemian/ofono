@@ -1,3 +1,20 @@
+ofono (1.12+bzr6843-0ubuntu1) UNRELEASED; urgency=low
+
+  [ Tony Espy ]
+  * rilmodem: re-factor cb_data_new to include user param.
+
+  [ Alfonso Sanchez-Beato ]
+  * gril: enable low-level multi-request support
+  * plugins: add mnclength plugin; re-factored fix (LP: 1231320).
+
+  [ Tony Espy ]
+  * gril, rilmodem/gprs, rilmodem/network-registration:
+    - merge nemomobile gprs/netreg code
+    - re-factor parcel code
+    - add gprs/netreg parcel unit tests
+
+ -- Tony Espy <espy@canonical.com>  Mon, 25 Nov 2013 15:34:17 -0500
+
 ofono (1.12+bzr6842-0ubuntu1) trusty; urgency=low
 
   [ Mikko Hurskainen ]
