@@ -1,5 +1,14 @@
 #!/usr/bin/make -f
 
+CFLAGS += -Werror -Wextra \
+	-Wno-unused-parameter \
+	-Wno-missing-field-initializers \
+	-Wdeclaration-after-statement \
+	-Wmissing-declarations \
+	-Wredundant-decls \
+	-Wcast-align \
+	-DG_DISABLE_DEPRECATED
+
 %:
 	dh $@ --parallel --with=autoreconf
 

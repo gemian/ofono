@@ -34,7 +34,9 @@
 #include <ofono/log.h>
 #include <ofono/modem.h>
 #include <ofono/gprs-context.h>
+#include "util.h"
 
+#include "common.h"
 #include "grilunsol.h"
 
 /* Minimum size is two int32s version/number of calls */
@@ -44,7 +46,7 @@
  * Minimum NITZ is: 'yy/mm/dd,hh:mm:ss'
  * TZ '(+/-)tz,dt' are optional
  */
-#define MIN_NITZ_SIZE 17 
+#define MIN_NITZ_SIZE 17
 
 static gint data_call_compare(gconstpointer a, gconstpointer b)
 {
@@ -84,7 +86,7 @@ void g_ril_unsol_free_data_call_list(struct unsol_data_call_list *unsol)
 }
 
 struct unsol_data_call_list *g_ril_unsol_parse_data_call_list(GRil *gril,
-					struct ril_msg *message,
+					const struct ril_msg *message,
 					struct ofono_error *error)
 {
 	struct data_call *call;
@@ -163,7 +165,7 @@ error:
 	return reply;
 }
 
-char *g_ril_unsol_parse_nitz(GRil *gril, struct ril_msg *message)
+char *g_ril_unsol_parse_nitz(GRil *gril, const struct ril_msg *message)
 {
 	struct parcel rilp;
 	gchar *nitz = NULL;
@@ -186,4 +188,94 @@ char *g_ril_unsol_parse_nitz(GRil *gril, struct ril_msg *message)
 
 error:
 	return nitz;
+}
+
+void g_ril_unsol_free_sms_data(struct unsol_sms_data *unsol)
+{
+	if (unsol != NULL) {
+		g_free(unsol->data);
+		g_free(unsol);
+	}
+}
+
+struct unsol_sms_data *g_ril_unsol_parse_new_sms(GRil *gril,
+						const struct ril_msg *message)
+{
+	struct parcel rilp;
+	char *ril_pdu;
+	size_t ril_pdu_len;
+	struct unsol_sms_data *sms_data;
+
+	sms_data = g_new0(struct unsol_sms_data, 1);
+	if (sms_data == NULL) {
+		ofono_error("%s out of memory", __func__);
+		goto error;
+	}
+
+	g_ril_init_parcel(message, &rilp);
+
+	ril_pdu = parcel_r_string(&rilp);
+	if (ril_pdu == NULL) {
+		ofono_error("%s Unable to parse notification", __func__);
+		goto error;
+	}
+
+	ril_pdu_len = strlen(ril_pdu);
+
+	sms_data->data = decode_hex(ril_pdu, ril_pdu_len,
+					&sms_data->length, -1);
+	if (sms_data->data == NULL) {
+		ofono_error("%s Unable to decode notification", __func__);
+		goto error_dec;
+	}
+
+	g_ril_append_print_buf(gril, "{%s}", ril_pdu);
+	g_ril_print_unsol(gril, message);
+
+	g_free(ril_pdu);
+
+	return sms_data;
+
+error_dec:
+	g_free(ril_pdu);
+error:
+	g_ril_unsol_free_sms_data(sms_data);
+	return NULL;
+}
+
+void g_ril_unsol_free_supp_svc_notif(struct unsol_supp_svc_notif *unsol)
+{
+	g_free(unsol);
+}
+
+struct unsol_supp_svc_notif *g_ril_unsol_parse_supp_svc_notif(GRil *gril,
+						struct ril_msg *message)
+{
+	struct parcel rilp;
+	char *tmp_number;
+	int type;
+	struct unsol_supp_svc_notif *unsol =
+		g_new0(struct unsol_supp_svc_notif, 1);
+
+	g_ril_init_parcel(message, &rilp);
+
+	unsol->notif_type = parcel_r_int32(&rilp);
+	unsol->code = parcel_r_int32(&rilp);
+	unsol->index = parcel_r_int32(&rilp);
+	type = parcel_r_int32(&rilp);
+	tmp_number = parcel_r_string(&rilp);
+
+	if (tmp_number != NULL) {
+		strncpy(unsol->number.number, tmp_number,
+			OFONO_MAX_PHONE_NUMBER_LENGTH);
+		unsol->number.type = type;
+		g_free(tmp_number);
+	}
+
+	g_ril_append_print_buf(gril, "{%d,%d,%d,%d,%s}",
+				unsol->notif_type, unsol->code, unsol->index,
+				type, tmp_number);
+	g_ril_print_unsol(gril, message);
+
+	return unsol;
 }
