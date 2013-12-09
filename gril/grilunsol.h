@@ -49,14 +49,35 @@ struct data_call {
     char *gateways;
 };
 
+struct unsol_sms_data {
+	long length;
+	unsigned char *data;
+};
+
+struct unsol_supp_svc_notif {
+	int notif_type;
+	int code;
+	int index;
+	struct ofono_phone_number number;
+};
+
 void g_ril_unsol_free_data_call_list(struct unsol_data_call_list *unsol);
 
 struct unsol_data_call_list *g_ril_unsol_parse_data_call_list(GRil *gril,
-					struct ril_msg *message,
+					const struct ril_msg *message,
 					struct ofono_error *error);
 
-char *g_ril_unsol_parse_nitz(GRil *gril, struct ril_msg *message);
+char *g_ril_unsol_parse_nitz(GRil *gril, const struct ril_msg *message);
 
+void g_ril_unsol_free_sms_data(struct unsol_sms_data *unsol);
+
+struct unsol_sms_data *g_ril_unsol_parse_new_sms(GRil *gril,
+						const struct ril_msg *message);
+
+void g_ril_unsol_free_supp_svc_notif(struct unsol_supp_svc_notif *unsol);
+
+struct unsol_supp_svc_notif *g_ril_unsol_parse_supp_svc_notif(GRil *gril,
+						struct ril_msg *message);
 
 #ifdef __cplusplus
 }

@@ -38,7 +38,7 @@
 
 struct request_test_data {
 	gconstpointer request;
-	guchar *parcel_data;
+	const guchar *parcel_data;
 	gsize parcel_size;
 };
 
@@ -189,11 +189,11 @@ static const struct req_sim_read_info req_sim_read_info_invalid_1 = {
 /* sim_read_binary tests */
 
 static const guchar req_sim_read_binary_parcel_valid_1[] = {
-0xb0, 0x00, 0x00, 0x00, 0xe2, 0x2f, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00,
-0x33, 0x00, 0x46, 0x00, 0x30, 0x00, 0x30, 0x00, 0x00, 0x00, 0x00, 0x00,
-0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0a, 0x00, 0x00, 0x00,
-0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00,
-0x00, 0x00, 0x00, 0x00,
+	0xb0, 0x00, 0x00, 0x00, 0xe2, 0x2f, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00,
+	0x33, 0x00, 0x46, 0x00, 0x30, 0x00, 0x30, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0a, 0x00, 0x00, 0x00,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00,
 };
 
 static const unsigned char sim_read_binary_path_valid_1[] = {0x3F, 0x00};
@@ -217,11 +217,11 @@ static const struct request_test_data sim_read_binary_valid_test_1 = {
 /* sim_read_record tests */
 
 static const guchar req_sim_read_record_parcel_valid_1[] = {
-0xb2, 0x00, 0x00, 0x00, 0xe2, 0x2f, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00,
-0x33, 0x00, 0x46, 0x00, 0x30, 0x00, 0x30, 0x00, 0x00, 0x00, 0x00, 0x00,
-0x05, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x0a, 0x00, 0x00, 0x00,
-0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00,
-0x00, 0x00, 0x00, 0x00,
+	0xb2, 0x00, 0x00, 0x00, 0xe2, 0x2f, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00,
+	0x33, 0x00, 0x46, 0x00, 0x30, 0x00, 0x30, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x05, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x0a, 0x00, 0x00, 0x00,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00,
 };
 
 static const unsigned char sim_read_record_path_valid_1[] = {0x3F, 0x00};
@@ -245,7 +245,7 @@ static const struct request_test_data sim_read_record_valid_test_1 = {
 /* read_imsi tests */
 
 static const guchar req_read_imsi_parcel_valid_1[] = {
-0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 };
 
 static const char read_imsi_aid_str_1[] = "";
@@ -266,9 +266,9 @@ struct request_test_pin_send_data {
 };
 
 static const guchar req_pin_send_parcel_valid_1[] = {
-0x02, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x31, 0x00, 0x32, 0x00,
-0x33, 0x00, 0x34, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-0x00, 0x00, 0x00, 0x00,
+	0x02, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x31, 0x00, 0x32, 0x00,
+	0x33, 0x00, 0x34, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00,
 };
 
 static const struct request_test_pin_send_data pin_send_record_valid_test_1 = {
@@ -281,11 +281,11 @@ static const struct request_test_pin_send_data pin_send_record_valid_test_1 = {
 /* pin_change_state tests */
 
 static const guchar req_pin_change_state_valid_1[] = {
-0x05, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x50, 0x00, 0x53, 0x00,
-0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x30, 0x00, 0x00, 0x00,
-0x04, 0x00, 0x00, 0x00, 0x31, 0x00, 0x32, 0x00, 0x33, 0x00, 0x34, 0x00,
-0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x30, 0x00, 0x00, 0x00,
-0xFF, 0xFF, 0xFF, 0xFF,
+	0x05, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x50, 0x00, 0x53, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x30, 0x00, 0x00, 0x00,
+	0x04, 0x00, 0x00, 0x00, 0x31, 0x00, 0x32, 0x00, 0x33, 0x00, 0x34, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x30, 0x00, 0x00, 0x00,
+	0xFF, 0xFF, 0xFF, 0xFF,
 };
 
 static const struct req_pin_change_state req_pin_change_state_valid1 = {
@@ -312,11 +312,11 @@ struct request_test_pin_send_puk_data {
 };
 
 static const guchar req_pin_send_puk_parcel_valid_1[] = {
-0x03, 0x00, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00, 0x31, 0x00, 0x32, 0x00,
-0x33, 0x00, 0x34, 0x00, 0x35, 0x00, 0x36, 0x00, 0x37, 0x00, 0x38, 0x00,
-0x00, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x31, 0x00, 0x32, 0x00,
-0x33, 0x00, 0x34, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-0x00, 0x00, 0x00, 0x00,
+	0x03, 0x00, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00, 0x31, 0x00, 0x32, 0x00,
+	0x33, 0x00, 0x34, 0x00, 0x35, 0x00, 0x36, 0x00, 0x37, 0x00, 0x38, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x31, 0x00, 0x32, 0x00,
+	0x33, 0x00, 0x34, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00,
 };
 
 static const struct request_test_pin_send_puk_data pin_send_puk_valid_test_1 = {
@@ -338,10 +338,10 @@ struct request_test_change_passwd_data {
 };
 
 static const guchar req_change_passwd_parcel_valid_1[] = {
-0x03, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x31, 0x00, 0x32, 0x00,
-0x33, 0x00, 0x34, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00,
-0x35, 0x00, 0x36, 0x00, 0x37, 0x00, 0x38, 0x00, 0x00, 0x00, 0x00, 0x00,
-0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x03, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x31, 0x00, 0x32, 0x00,
+	0x33, 0x00, 0x34, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00,
+	0x35, 0x00, 0x36, 0x00, 0x37, 0x00, 0x38, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 };
 
 static const struct request_test_change_passwd_data change_passwd_valid_test_1 = {
@@ -352,12 +352,174 @@ static const struct request_test_change_passwd_data change_passwd_valid_test_1 =
 	.parcel_size = sizeof(req_change_passwd_parcel_valid_1),
 };
 
+/* sms_cmgs tests */
+
+static const unsigned char req_sms_cmgs_pdu_valid_1[] = {
+	0x00, 0x11, 0x00, 0x09, 0x81, 0x36, 0x54, 0x39, 0x80, 0xf5, 0x00, 0x00,
+	0xa7, 0x0a, 0xc8, 0x37, 0x3b, 0x0c, 0x6a, 0xd7, 0xdd, 0xe4, 0x37
+};
+
+static const guchar req_sms_cmgs_parcel_valid_1[] = {
+	0x02, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff, 0x2c, 0x00, 0x00, 0x00,
+	0x31, 0x00, 0x31, 0x00, 0x30, 0x00, 0x30, 0x00, 0x30, 0x00, 0x39, 0x00,
+	0x38, 0x00, 0x31, 0x00, 0x33, 0x00, 0x36, 0x00, 0x35, 0x00, 0x34, 0x00,
+	0x33, 0x00, 0x39, 0x00, 0x38, 0x00, 0x30, 0x00, 0x46, 0x00, 0x35, 0x00,
+	0x30, 0x00, 0x30, 0x00, 0x30, 0x00, 0x30, 0x00, 0x41, 0x00, 0x37, 0x00,
+	0x30, 0x00, 0x41, 0x00, 0x43, 0x00, 0x38, 0x00, 0x33, 0x00, 0x37, 0x00,
+	0x33, 0x00, 0x42, 0x00, 0x30, 0x00, 0x43, 0x00, 0x36, 0x00, 0x41, 0x00,
+	0x44, 0x00, 0x37, 0x00, 0x44, 0x00, 0x44, 0x00, 0x45, 0x00, 0x34, 0x00,
+	0x33, 0x00, 0x37, 0x00, 0x00, 0x00, 0x00, 0x00
+};
+
+static const struct req_sms_cmgs req_sms_cmgs_valid1 = {
+	.pdu = req_sms_cmgs_pdu_valid_1,
+	.pdu_len = sizeof(req_sms_cmgs_pdu_valid_1),
+	.tpdu_len = sizeof(req_sms_cmgs_pdu_valid_1) - 1,
+};
+
+static const struct request_test_data sms_cmgs_valid_test_1 = {
+	.request = &req_sms_cmgs_valid1,
+	.parcel_data = (guchar *) &req_sms_cmgs_parcel_valid_1,
+	.parcel_size = sizeof(req_sms_cmgs_parcel_valid_1),
+};
+
+/* sms_acknowledge tests */
+
+static const guchar req_sms_acknowledge_parcel_valid_1[] = {
+	0x02, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+};
+
+static const struct request_test_data sms_acknowledge_valid_test_1 = {
+	.request = NULL,
+	.parcel_data = (guchar *) &req_sms_acknowledge_parcel_valid_1,
+	.parcel_size = sizeof(req_sms_acknowledge_parcel_valid_1),
+};
+
+/* set_smsc_address tests */
+
+static const guchar req_set_smsc_address_valid_parcel1[] = {
+	0x0e, 0x00, 0x00, 0x00, 0x22, 0x00, 0x2b, 0x00, 0x33, 0x00, 0x34, 0x00,
+	0x36, 0x00, 0x30, 0x00, 0x37, 0x00, 0x30, 0x00, 0x30, 0x00, 0x33, 0x00,
+	0x31, 0x00, 0x31, 0x00, 0x30, 0x00, 0x22, 0x00, 0x00, 0x00, 0x00, 0x00
+};
+
+static const struct ofono_phone_number smsc_address_valid1 = {
+	.type = 145,
+	.number = "34607003110"
+};
+
+static const struct request_test_data smsc_address_valid_test_1 = {
+	.request = &smsc_address_valid1,
+	.parcel_data = (guchar *) &req_set_smsc_address_valid_parcel1,
+	.parcel_size = sizeof(req_set_smsc_address_valid_parcel1),
+};
+
+/* dial tests */
+
+struct request_test_dial_data {
+	const struct ofono_phone_number ph;
+	enum ofono_clir_option clir;
+	const guchar *parcel_data;
+	size_t parcel_size;
+};
+
+static const guchar req_dial_parcel_valid_1[] = {
+	0x09, 0x00, 0x00, 0x00, 0x39, 0x00, 0x31, 0x00, 0x37, 0x00, 0x35, 0x00,
+	0x32, 0x00, 0x35, 0x00, 0x35, 0x00, 0x35, 0x00, 0x35, 0x00, 0x00, 0x00,
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+};
+
+static const struct request_test_dial_data dial_valid_test_1 = {
+	.ph = { .number = "917525555", .type = 129 },
+	.clir = OFONO_CLIR_OPTION_DEFAULT,
+	.parcel_data = req_dial_parcel_valid_1,
+	.parcel_size = sizeof(req_dial_parcel_valid_1),
+};
+
+/* hangup tests */
+
+static const guchar req_hangup_parcel_valid_1[] = {
+	0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00
+};
+
+static unsigned hangup_call_id_valid_1 = 1;
+
+static const struct request_test_data set_hangup_valid_test_1 = {
+	.request = &hangup_call_id_valid_1,
+	.parcel_data = req_hangup_parcel_valid_1,
+	.parcel_size = sizeof(req_hangup_parcel_valid_1),
+};
+
+/* dtmf tests */
+
+static const guchar req_dtmf_parcel_valid_1[] = {
+	0x01, 0x00, 0x00, 0x00, 0x34, 0x00, 0x00, 0x00
+};
+
+static char dtmf_char_valid_1 = '4';
+
+static const struct request_test_data dtmf_valid_test_1 = {
+	.request = &dtmf_char_valid_1,
+	.parcel_data = req_dtmf_parcel_valid_1,
+	.parcel_size = sizeof(req_dtmf_parcel_valid_1),
+};
+
+/* separate_conn tests */
+
+static const guchar req_separate_conn_parcel_valid_1[] = {
+	0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00
+};
+
+static unsigned separate_conn_call_id_valid_1 = 1;
+
+static const struct request_test_data separate_conn_valid_test_1 = {
+	.request = &separate_conn_call_id_valid_1,
+	.parcel_data = req_separate_conn_parcel_valid_1,
+	.parcel_size = sizeof(req_separate_conn_parcel_valid_1),
+};
+
+/* set_supp_svc_notif tests */
+
+static const guchar req_set_supp_svc_notif_parcel_valid_1[] = {
+	0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00
+};
+
+static const struct request_test_data set_supp_svc_notif_valid_test_1 = {
+	.request = NULL,
+	.parcel_data = req_set_supp_svc_notif_parcel_valid_1,
+	.parcel_size = sizeof(req_set_supp_svc_notif_parcel_valid_1),
+};
+
+/* set_mute tests */
+
+static const int mute_off = 0;
+static const int mute_on = 1;
+
+static const guchar req_set_mute_valid_parcel1[] = {
+	0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+};
+
+static const struct request_test_data set_mute_valid_test_1 = {
+	.request = &mute_off,
+	.parcel_data = (guchar *) &req_set_mute_valid_parcel1,
+	.parcel_size = sizeof(req_set_mute_valid_parcel1),
+};
+
+static const guchar req_set_mute_valid_parcel2[] = {
+	0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00
+};
+
+static const struct request_test_data set_mute_valid_test_2 = {
+	.request = &mute_on,
+	.parcel_data = (guchar *) &req_set_mute_valid_parcel2,
+	.parcel_size = sizeof(req_set_mute_valid_parcel2),
+};
 
 /*
  * The following hexadecimal data represents a serialized Binder parcel
  * instance containing a valid RIL_REQUEST_RADIO_POWER 'OFF' message.
  */
-static const guchar req_power_off_valid_parcel1[8] = {
+static const guchar req_power_off_valid_parcel1[] = {
 	0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 };
 
@@ -365,7 +527,7 @@ static const guchar req_power_off_valid_parcel1[8] = {
  * The following hexadecimal data represents a serialized Binder parcel
  * instance containing a valid RIL_REQUEST_RADIO_POWER 'ON' message.
  */
-static const guchar req_power_on_valid_parcel2[8] = {
+static const guchar req_power_on_valid_parcel2[] = {
 	0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00
 };
 
@@ -375,13 +537,13 @@ static const gboolean power_on = TRUE;
 static const struct request_test_data power_valid_test_1 = {
 	.request = &power_off,
 	.parcel_data = (guchar *) &req_power_off_valid_parcel1,
-	.parcel_size = 8,
+	.parcel_size = sizeof(req_power_off_valid_parcel1),
 };
 
 static const struct request_test_data power_valid_test_2 = {
 	.request = &power_on,
 	.parcel_data = (guchar *) &req_power_on_valid_parcel2,
-	.parcel_size = 8,
+	.parcel_size = sizeof(req_power_on_valid_parcel2),
 };
 
 static void test_deactivate_data_call_invalid(gconstpointer data)
@@ -600,6 +762,131 @@ static void test_request_change_passwd(gconstpointer data)
 	parcel_free(&rilp);
 }
 
+static void test_request_sms_cmgs(gconstpointer data)
+{
+	const struct request_test_data *test_data = data;
+	const struct req_sms_cmgs *req = test_data->request;
+	struct parcel rilp;
+
+	g_ril_request_sms_cmgs(NULL, req, &rilp);
+
+	g_assert(!memcmp(rilp.data, test_data->parcel_data,
+			test_data->parcel_size));
+
+	parcel_free(&rilp);
+}
+
+static void test_request_sms_acknowledge(gconstpointer data)
+{
+	const struct request_test_data *test_data = data;
+	struct parcel rilp;
+
+	g_ril_request_sms_acknowledge(NULL, &rilp);
+
+	g_assert(!memcmp(rilp.data, test_data->parcel_data,
+			test_data->parcel_size));
+
+	parcel_free(&rilp);
+}
+
+static void test_request_set_smsc_address(gconstpointer data)
+{
+	const struct request_test_data *test_data = data;
+	const struct ofono_phone_number *number = test_data->request;
+	struct parcel rilp;
+
+	g_ril_request_set_smsc_address(NULL, number, &rilp);
+
+	g_assert(!memcmp(rilp.data, test_data->parcel_data,
+			test_data->parcel_size));
+
+	parcel_free(&rilp);
+}
+
+static void test_request_dial(gconstpointer data)
+{
+	const struct request_test_dial_data *test_data = data;
+	const struct ofono_phone_number *ph = &test_data->ph;
+	enum ofono_clir_option clir = test_data->clir;
+	struct parcel rilp;
+
+	g_ril_request_dial(NULL, ph, clir, &rilp);
+
+	g_assert(!memcmp(rilp.data, test_data->parcel_data,
+			test_data->parcel_size));
+
+	parcel_free(&rilp);
+}
+
+static void test_request_hangup(gconstpointer data)
+{
+	const struct request_test_data *test_data = data;
+	const unsigned *call_id = test_data->request;
+	struct parcel rilp;
+
+	g_ril_request_hangup(NULL, *call_id, &rilp);
+
+	g_assert(!memcmp(rilp.data, test_data->parcel_data,
+			test_data->parcel_size));
+
+	parcel_free(&rilp);
+}
+
+static void test_request_dtmf(gconstpointer data)
+{
+	const struct request_test_data *test_data = data;
+	const char *dtmf_char = test_data->request;
+	struct parcel rilp;
+
+	g_ril_request_dtmf(NULL, *dtmf_char, &rilp);
+
+	g_assert(!memcmp(rilp.data, test_data->parcel_data,
+			test_data->parcel_size));
+
+	parcel_free(&rilp);
+}
+
+static void test_request_separate_conn(gconstpointer data)
+{
+	const struct request_test_data *test_data = data;
+	const unsigned *call_id = test_data->request;
+	struct parcel rilp;
+
+	g_ril_request_separate_conn(NULL, *call_id, &rilp);
+
+	g_assert(!memcmp(rilp.data, test_data->parcel_data,
+			test_data->parcel_size));
+
+	parcel_free(&rilp);
+}
+
+static void test_request_set_supp_svc_notif(gconstpointer data)
+{
+	const struct request_test_data *test_data = data;
+	struct parcel rilp;
+
+	g_ril_request_set_supp_svc_notif(NULL, &rilp);
+
+	g_assert(!memcmp(rilp.data, test_data->parcel_data,
+			test_data->parcel_size));
+
+	parcel_free(&rilp);
+}
+
+static void test_request_set_mute_valid(gconstpointer data)
+{
+	const struct request_test_data *test_data = data;
+	const int *muted = test_data->request;
+	struct parcel rilp;
+
+	g_ril_request_set_mute(NULL, *muted, &rilp);
+
+	g_assert(!memcmp(rilp.data, test_data->parcel_data,
+				test_data->parcel_size));
+
+	parcel_free(&rilp);
+}
+
 int main(int argc, char **argv)
 {
 	g_test_init(&argc, &argv, NULL);
@@ -692,50 +979,100 @@ int main(int argc, char **argv)
 				&power_valid_test_2,
 				test_request_power_valid);
 
-	g_test_add_data_func("/testgrilrequest/sim_read_info: "
+	g_test_add_data_func("/testgrilrequest/sim: "
 				"valid SIM_READ_INFO Test 1",
 				&req_sim_read_info_valid_1,
 				test_request_sim_read_info_valid);
 
-	g_test_add_data_func("/testgrilrequest/sim_read_info: "
+	g_test_add_data_func("/testgrilrequest/sim: "
 				"invalid SIM_READ_INFO Test 1",
 				&req_sim_read_info_invalid_1,
 				test_request_sim_read_info_invalid);
 
-	g_test_add_data_func("/testgrilrequest/sim_read_binary: "
+	g_test_add_data_func("/testgrilrequest/sim: "
 				"valid SIM_READ_BINARY Test 1",
 				&sim_read_binary_valid_test_1,
 				test_request_sim_read_binary_valid);
 
-	g_test_add_data_func("/testgrilrequest/sim_read_record: "
+	g_test_add_data_func("/testgrilrequest/sim: "
 				"valid SIM_READ_RECORD Test 1",
 				&sim_read_record_valid_test_1,
 				test_request_sim_read_record_valid);
 
-	g_test_add_data_func("/testgrilrequest/read_imsi: "
+	g_test_add_data_func("/testgrilrequest/sim: "
 				"valid READ_IMSI Test 1",
 				&read_imsi_valid_test_1,
 				test_request_read_imsi);
 
-	g_test_add_data_func("/testgrilrequest/pin_send: "
+	g_test_add_data_func("/testgrilrequest/sim: "
 				"valid PIN_SEND Test 1",
 				&pin_send_record_valid_test_1,
 				test_request_pin_send);
 
-	g_test_add_data_func("/testgrilrequest/pin_change_state: "
+	g_test_add_data_func("/testgrilrequest/sim: "
 				"valid PIN_CHANGE_STATE Test 1",
 				&pin_change_state_valid_test_1,
 				test_request_pin_change_state);
 
-	g_test_add_data_func("/testgrilrequest/pin_send_puk: "
+	g_test_add_data_func("/testgrilrequest/sim: "
 				"valid PIN_SEND_PUK Test 1",
 				&pin_send_puk_valid_test_1,
 				test_request_pin_send_puk);
 
-	g_test_add_data_func("/testgrilrequest/change_passwd: "
+	g_test_add_data_func("/testgrilrequest/sim: "
 				"valid CHANGE_PASSWD Test 1",
 				&change_passwd_valid_test_1,
 				test_request_change_passwd);
+
+	g_test_add_data_func("/testgrilrequest/sms: "
+				"valid SMS_CMGS Test 1",
+				&sms_cmgs_valid_test_1,
+				test_request_sms_cmgs);
+
+	g_test_add_data_func("/testgrilrequest/sms: "
+				"valid SMS_ACKNOWLEDGE Test 1",
+				&sms_acknowledge_valid_test_1,
+				test_request_sms_acknowledge);
+
+	g_test_add_data_func("/testgrilrequest/sms: "
+				"valid SET_SMSC_ADDRESS Test 1",
+				&smsc_address_valid_test_1,
+				test_request_set_smsc_address);
+
+	g_test_add_data_func("/testgrilrequest/voicecall: "
+				"valid DIAL Test 1",
+				&dial_valid_test_1,
+				test_request_dial);
+
+	g_test_add_data_func("/testgrilrequest/voicecall: "
+				"valid HANGUP Test 1",
+				&set_hangup_valid_test_1,
+				test_request_hangup);
+
+	g_test_add_data_func("/testgrilrequest/voicecall: "
+				"valid DTMF Test 1",
+				&dtmf_valid_test_1,
+				test_request_dtmf);
+
+	g_test_add_data_func("/testgrilrequest/voicecall: "
+				"valid SEPARATE_CONN Test 1",
+				&separate_conn_valid_test_1,
+				test_request_separate_conn);
+
+	g_test_add_data_func("/testgrilrequest/voicecall: "
+				"valid SET_SUPP_SVC_NOTIF Test 1",
+				&set_supp_svc_notif_valid_test_1,
+				test_request_set_supp_svc_notif);
+
+	g_test_add_data_func("/testgrilrequest/call-volume: "
+				"valid SET_MUTE Test 1",
+				&set_mute_valid_test_1,
+				test_request_set_mute_valid);
+
+	g_test_add_data_func("/testgrilrequest/call-volume: "
+				"valid SET_MUTE Test 2",
+				&set_mute_valid_test_2,
+				test_request_set_mute_valid);
 
 #endif
 	return g_test_run();

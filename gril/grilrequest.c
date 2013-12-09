@@ -38,6 +38,7 @@
 #include "grilrequest.h"
 #include "simutil.h"
 #include "util.h"
+#include "common.h"
 
 /* DEACTIVATE_DATA_CALL request parameters */
 #define DEACTIVATE_DATA_CALL_NUM_PARAMS 2
@@ -567,4 +568,152 @@ void g_ril_request_change_passwd(GRil *gril,
 
 	g_ril_append_print_buf(gril, "(old=%s,new=%s,aid=%s)",
 				old_passwd, new_passwd, aid_str);
+}
+
+void g_ril_request_sms_cmgs(GRil *gril,
+				const struct req_sms_cmgs *req,
+				struct parcel *rilp)
+{
+	int smsc_len;
+	char *tpdu;
+
+	parcel_init(rilp);
+	parcel_w_int32(rilp, 2);	/* Number of strings */
+
+	/*
+	 * SMSC address:
+	 *
+	 * smsc_len == 1, then zero-length SMSC was spec'd
+	 * RILD expects a NULL string in this case instead
+	 * of a zero-length string.
+	 */
+	smsc_len = req->pdu_len - req->tpdu_len;
+	/* TODO: encode SMSC & write to parcel */
+	if (smsc_len > 1)
+		ofono_error("SMSC address specified (smsc_len %d); "
+				"NOT-IMPLEMENTED", smsc_len);
+
+	parcel_w_string(rilp, NULL); /* SMSC address; NULL == default */
+
+	/*
+	 * TPDU:
+	 *
+	 * 'pdu' is a raw hexadecimal string
+	 *  encode_hex() turns it into an ASCII/hex UTF8 buffer
+	 *  parcel_w_string() encodes utf8 -> utf16
+	 */
+	tpdu = encode_hex(req->pdu + smsc_len, req->tpdu_len, 0);
+	parcel_w_string(rilp, tpdu);
+
+	g_ril_append_print_buf(gril, "(%s)", tpdu);
+
+	g_free(tpdu);
+}
+
+void g_ril_request_sms_acknowledge(GRil *gril,
+					struct parcel *rilp)
+{
+	parcel_init(rilp);
+	parcel_w_int32(rilp, 2); /* Number of int32 values in array */
+	parcel_w_int32(rilp, 1); /* Successful receipt */
+	parcel_w_int32(rilp, 0); /* error code */
+
+	g_ril_append_print_buf(gril, "(1,0)");
+}
+
+void g_ril_request_set_smsc_address(GRil *gril,
+					const struct ofono_phone_number *sca,
+					struct parcel *rilp)
+{
+	char number[OFONO_MAX_PHONE_NUMBER_LENGTH + 4];
+
+	if (sca->type == OFONO_NUMBER_TYPE_INTERNATIONAL)
+		snprintf(number, sizeof(number), "\"+%s\"", sca->number);
+	else
+		snprintf(number, sizeof(number), "\"%s\"", sca->number);
+
+	parcel_init(rilp);
+	parcel_w_string(rilp, number);
+
+	g_ril_append_print_buf(gril, "(%s)", number);
+}
+
+void g_ril_request_dial(GRil *gril,
+			const struct ofono_phone_number *ph,
+			enum ofono_clir_option clir,
+			struct parcel *rilp)
+{
+	parcel_init(rilp);
+
+	/* Number to dial */
+	parcel_w_string(rilp, phone_number_to_string(ph));
+	/* CLIR mode */
+	parcel_w_int32(rilp, clir);
+	/* USS, empty string */
+	/* TODO: Deal with USS properly */
+	parcel_w_int32(rilp, 0);
+	parcel_w_int32(rilp, 0);
+
+	g_ril_append_print_buf(gril, "(%s,%d,0,0)",
+				phone_number_to_string(ph),
+				clir);
+}
+
+void g_ril_request_hangup(GRil *gril,
+				unsigned call_id,
+				struct parcel *rilp)
+{
+	parcel_init(rilp);
+	parcel_w_int32(rilp, 1); /* Always 1 - AT+CHLD=1x */
+	parcel_w_int32(rilp, call_id);
+
+	g_ril_append_print_buf(gril, "(%u)", call_id);
+}
+
+void g_ril_request_dtmf(GRil *gril,
+			char dtmf_char,
+			struct parcel *rilp)
+{
+	char ril_dtmf[2];
+
+	parcel_init(rilp);
+	/* Ril wants just one character, but we need to send as string */
+	ril_dtmf[0] = dtmf_char;
+	ril_dtmf[1] = '\0';
+	parcel_w_string(rilp, ril_dtmf);
+
+	g_ril_append_print_buf(gril, "(%s)", ril_dtmf);
+}
+
+void g_ril_request_separate_conn(GRil *gril,
+					int call_id,
+					struct parcel *rilp)
+{
+	parcel_init(rilp);
+
+	/* Payload is an array that holds just one element */
+	parcel_w_int32(rilp, 1);
+	parcel_w_int32(rilp, call_id);
+
+	g_ril_append_print_buf(gril, "(%d)", call_id);
+}
+
+void g_ril_request_set_supp_svc_notif(GRil *gril,
+					struct parcel *rilp)
+{
+	parcel_init(rilp);
+	parcel_w_int32(rilp, 1); /* size of array */
+	parcel_w_int32(rilp, 1); /* notifications enabled */
+
+	g_ril_append_print_buf(gril, "(1)");
+}
+
+void g_ril_request_set_mute(GRil *gril, int muted, struct parcel *rilp)
+{
+	parcel_init(rilp);
+
+	parcel_w_int32(rilp, 1);
+	parcel_w_int32(rilp, muted);
+
+	g_ril_append_print_buf(gril, "(%d)", muted);
 }

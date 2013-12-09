@@ -86,6 +86,12 @@ struct req_pin_change_state {
 	const char *passwd;
 };
 
+struct req_sms_cmgs {
+	const unsigned char *pdu;
+	int pdu_len;
+	int tpdu_len;
+};
+
 gboolean g_ril_request_deactivate_data_call(GRil *gril,
 				const struct req_deactivate_data_call *req,
 				struct parcel *rilp,
@@ -140,6 +146,40 @@ void g_ril_request_change_passwd(GRil *gril,
 					const char *new_passwd,
 					const gchar *aid_str,
 					struct parcel *rilp);
+
+void g_ril_request_sms_cmgs(GRil *gril,
+				const struct req_sms_cmgs *req,
+				struct parcel *rilp);
+
+void g_ril_request_sms_acknowledge(GRil *gril, struct parcel *rilp);
+
+void g_ril_request_set_smsc_address(GRil *gril,
+					const struct ofono_phone_number *sca,
+					struct parcel *rilp);
+
+void g_ril_request_dial(GRil *gril,
+			const struct ofono_phone_number *ph,
+			enum ofono_clir_option clir,
+			struct parcel *rilp);
+
+void g_ril_request_hangup(GRil *gril,
+				unsigned call_id,
+				struct parcel *rilp);
+
+void g_ril_request_dtmf(GRil *gril,
+			char dtmf_char,
+			struct parcel *rilp);
+
+void g_ril_request_separate_conn(GRil *gril,
+					int call_id,
+					struct parcel *rilp);
+
+void g_ril_request_set_supp_svc_notif(GRil *gril,
+					struct parcel *rilp);
+
+void g_ril_request_set_mute(GRil *gril,
+				int muted,
+				struct parcel *rilp);
 
 #ifdef __cplusplus
 }

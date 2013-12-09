@@ -1,3 +1,43 @@
+ofono (1.12+bzr6845-0ubuntu1) UNRELEASED; urgency=low
+
+  [ Alfonso Sanchez-Beato ]
+  * gril, include, rilmodem/sms, unit: SMS re-factoring
+    - merge applicable nemomobile code
+    - re-factor parcel code
+    - add sms parcel unit tests
+  * build, doc, plugins, test: Add SMS history plugin
+    - adds support for SMS delivery reports (LP: #1223314)
+  * gril, src, unit: Fix build warning
+
+  [ Tony Espy ]
+  * gril, unit: fix const casts in gril and unit tests
+  * rilmodem/gprs: set default max_cids to 1 (LP: 1254746)
+
+  [ Alfonso Sanchez-Beato ]
+  * gril, rilmodem/voicecall, unit: Voicecall re-factoring
+    - merge applicable nemomobile code, including support
+      for multi-party calling and call hold
+    - re-factor parcel code
+    - add voicecall parcel unit tests
+  * rilmodem: fix memory leaks reported by valgrind
+  * gril, rilmodem/sim: Remove SIM file-not-found error logging
+    - includes low-level gril fix to handle ril messages
+      that include a failure code, but also include event
+      data (LP: #1254219)
+  * gril, rilmodem/call-volume, unit: Call-volume re-factoring
+    - merge applicable nemomobile code
+    - re-factor parcel code
+    - add call-volume parcel unit tests
+  * gril, rilmodem/devinfo, unit: Devinfo re-factoring
+    - re-factor parcel code
+    - add devinfo parcel unit tests
+
+  [ Tony Espy ]
+  * unit: Add rilmodem gprs/netreg parcel unit tests
+  * debian/rules: Add CFLAGS to enable strict warnings checking
+
+ -- Tony Espy <espy@canonical.com>  Wed, 04 Dec 2013 14:10:32 -0500
+
 ofono (1.12+bzr6844-0ubuntu1) trusty; urgency=low
 
   [ Alfonso Sanchez-Beato ]
