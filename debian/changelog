@@ -1,3 +1,10 @@
+ofono (1.12+bzr6847-0ubuntu1) UNRELEASED; urgency=low
+
+  [ Tony Espy ]
+  * rilmodem/sms: Don't parse SMS error reply (LP: #1260388)
+
+ -- Tony Espy <espy@canonical.com>  Thu, 12 Dec 2013 17:15:01 -0500
+
 ofono (1.12+bzr6846-0ubuntu1) trusty; urgency=low
 
   [ Alfonso Sanchez-Beato ]
