@@ -1,3 +1,16 @@
+ofono (1.12+bzr6850-0ubuntu1) UNRELEASED; urgency=low
+
+  [ Tony Espy ]
+  * debian/rules: add -Wall to CFLAGS;
+    mirrors upstream build
+  * plugins/nettime.c: fix build error
+    by adding <stdlib.h> include
+  * src/log.c: fix build error by adding
+    a print_backtrace() function declaration
+    with __attribute__ ((unused))
+
+ -- Tony Espy <espy@canonical.com>  Mon, 23 Dec 2013 13:33:47 -0500
+
 ofono (1.12+bzr6848-0ubuntu1) trusty; urgency=low
 
   [ Tony Espy ]
