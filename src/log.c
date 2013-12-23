@@ -113,6 +113,8 @@ void ofono_debug(const char *format, ...)
 	va_end(ap);
 }
 
+static void print_backtrace(unsigned int offset) __attribute__ ((used));
+
 static void print_backtrace(unsigned int offset)
 {
 	void *frames[99];
