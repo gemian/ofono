@@ -61,6 +61,11 @@ struct unsol_supp_svc_notif {
 	struct ofono_phone_number number;
 };
 
+struct unsol_ussd {
+	int type;
+	char *message;
+};
+
 void g_ril_unsol_free_data_call_list(struct unsol_data_call_list *unsol);
 
 struct unsol_data_call_list *g_ril_unsol_parse_data_call_list(GRil *gril,
@@ -74,10 +79,20 @@ void g_ril_unsol_free_sms_data(struct unsol_sms_data *unsol);
 struct unsol_sms_data *g_ril_unsol_parse_new_sms(GRil *gril,
 						const struct ril_msg *message);
 
+int g_ril_unsol_parse_radio_state_changed(GRil *gril,
+					const struct ril_msg *message);
+
+int g_ril_unsol_parse_signal_strength(GRil *gril,
+					const struct ril_msg *message);
+
 void g_ril_unsol_free_supp_svc_notif(struct unsol_supp_svc_notif *unsol);
 
 struct unsol_supp_svc_notif *g_ril_unsol_parse_supp_svc_notif(GRil *gril,
 						struct ril_msg *message);
+
+void g_ril_unsol_free_ussd(struct unsol_ussd *unsol);
+
+struct unsol_ussd *g_ril_unsol_parse_ussd(GRil *gril, struct ril_msg *message);
 
 #ifdef __cplusplus
 }

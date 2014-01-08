@@ -9,6 +9,26 @@ ofono (1.12+bzr6850-0ubuntu1) UNRELEASED; urgency=low
     a print_backtrace() function declaration
     with __attribute__ ((unused))
 
+  [ Alfonso Sanchez-Beato ]
+  * gril, unit, rilmodem/call-settings: Add Call-settings suport
+    - merge applicable nemomobile code
+    - re-factor parcel code
+    - add call-volume parcel unit tests
+  * gril, unit, rilmodem/ussd: Add USSD support (LP: #1195398)
+    - merge applicable nemomobile code
+    - re-factor parcel code
+    - add call-volume parcel unit tests
+
+  [ Tony Espy ]
+  * gril: fix cancel_group/offline crash (LP: #1262340)
+
+  [ Alfonso Sanchez-Beato ]
+  * rilmodem/voicecall: fix conference calls for maguro (LP: #1257206)
+
+  [ Tony Espy ]
+  * gril, plugins/ril: Re-worked RIL power code to prepare for flight-
+    mode implementation (LP: #1245860), (LP: #1208657).
+
  -- Tony Espy <espy@canonical.com>  Mon, 23 Dec 2013 13:33:47 -0500
 
 ofono (1.12+bzr6848-0ubuntu1) trusty; urgency=low
