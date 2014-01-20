@@ -1,4 +1,4 @@
-ofono (1.12+bzr6850-0ubuntu1) UNRELEASED; urgency=low
+ofono (1.12+bzr6851-0ubuntu1) trusty; urgency=low
 
   [ Tony Espy ]
   * debian/rules: add -Wall to CFLAGS;
@@ -8,6 +8,9 @@ ofono (1.12+bzr6850-0ubuntu1) UNRELEASED; urgency=low
   * src/log.c: fix build error by adding
     a print_backtrace() function declaration
     with __attribute__ ((unused))
+  * gril: fix cancel_group/offline crash (LP: #1262340)
+  * gril, plugins/ril: Re-worked RIL power code to prepare for flight-
+    mode implementation (LP: #1245860), (LP: #1208657).
 
   [ Alfonso Sanchez-Beato ]
   * gril, unit, rilmodem/call-settings: Add Call-settings suport
@@ -18,18 +21,9 @@ ofono (1.12+bzr6850-0ubuntu1) UNRELEASED; urgency=low
     - merge applicable nemomobile code
     - re-factor parcel code
     - add call-volume parcel unit tests
-
-  [ Tony Espy ]
-  * gril: fix cancel_group/offline crash (LP: #1262340)
-
-  [ Alfonso Sanchez-Beato ]
   * rilmodem/voicecall: fix conference calls for maguro (LP: #1257206)
 
-  [ Tony Espy ]
-  * gril, plugins/ril: Re-worked RIL power code to prepare for flight-
-    mode implementation (LP: #1245860), (LP: #1208657).
-
- -- Tony Espy <espy@canonical.com>  Mon, 23 Dec 2013 13:33:47 -0500
+ -- Ricardo Salveti de Araujo <ricardo.salveti@canonical.com>  Mon, 20 Jan 2014 19:44:46 -0200
 
 ofono (1.12+bzr6848-0ubuntu1) trusty; urgency=low
 
