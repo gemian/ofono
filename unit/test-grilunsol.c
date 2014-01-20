@@ -42,6 +42,12 @@
  * once more tests are added.
  */
 
+typedef struct signal_strength_test signal_strength_test;
+struct signal_strength_test {
+	int strength;
+	const struct ril_msg msg;
+};
+
 static const struct ril_msg unsol_data_call_list_changed_invalid_1 = {
 	.buf = "",
 	.buf_len = 0,
@@ -175,6 +181,63 @@ static const struct ril_msg unsol_supp_svc_notif_valid_1 = {
 	.error = 0,
 };
 
+/*
+ * The following hexadecimal data represents a serialized Binder parcel
+ * instance containing a valid RIL_UNSOL_SIGNAL_STRENGTH message
+ * with the following parameters:
+ *
+ * (gw: 14, cdma: -1, evdo: -1, lte: 99)
+ *
+ * Note, the return value for gw sigmal is: (gw * 100) / 31, which
+ * in this case equals 45.
+ */
+static const guchar unsol_signal_strength_parcel1[] = {
+	0x0e, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,	0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0xff, 0xff, 0x63, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0x7f,
+	0xff, 0xff, 0xff, 0x7f, 0xff, 0xff, 0xff, 0x7f, 0xff, 0xff, 0xff, 0x7f
+};
+
+static const signal_strength_test unsol_signal_strength_valid_1 = {
+	.strength = 45,
+	.msg = {
+		.buf = (gchar *) &unsol_signal_strength_parcel1,
+		.buf_len = sizeof(unsol_signal_strength_parcel1),
+		.unsolicited = TRUE,
+		.req = RIL_UNSOL_SIGNAL_STRENGTH,
+		.serial_no = 0,
+		.error = 0,
+	}
+};
+
+/*
+ * The following hexadecimal data represents a serialized Binder parcel
+ * instance containing a valid RIL_UNSOL_ON_USSD message with the following
+ * parameters:
+ *
+ * {0,Spain 12:56 09/12/13  Canary 11:56 09/12/13  }
+ */
+static const guchar unsol_on_ussd_parcel1[] = {
+	0x02, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x30, 0x00, 0x00, 0x00,
+	0x2d, 0x00, 0x00, 0x00, 0x53, 0x00, 0x70, 0x00, 0x61, 0x00, 0x69, 0x00,
+	0x6e, 0x00, 0x20, 0x00, 0x31, 0x00, 0x32, 0x00, 0x3a, 0x00, 0x35, 0x00,
+	0x36, 0x00, 0x20, 0x00, 0x30, 0x00, 0x39, 0x00, 0x2f, 0x00, 0x31, 0x00,
+	0x32, 0x00, 0x2f, 0x00, 0x31, 0x00, 0x33, 0x00, 0x20, 0x00, 0x20, 0x00,
+	0x43, 0x00, 0x61, 0x00, 0x6e, 0x00, 0x61, 0x00, 0x72, 0x00, 0x79, 0x00,
+	0x20, 0x00, 0x31, 0x00, 0x31, 0x00, 0x3a, 0x00, 0x35, 0x00, 0x36, 0x00,
+	0x20, 0x00, 0x30, 0x00, 0x39, 0x00, 0x2f, 0x00, 0x31, 0x00, 0x32, 0x00,
+	0x2f, 0x00, 0x31, 0x00, 0x33, 0x00, 0x20, 0x00, 0x20, 0x00, 0x00, 0x00
+};
+
+static const struct ril_msg unsol_on_ussd_valid_1 = {
+	.buf = (gchar *) &unsol_on_ussd_parcel1,
+	.buf_len = sizeof(unsol_on_ussd_parcel1),
+	.unsolicited = TRUE,
+	.req = RIL_UNSOL_ON_USSD,
+	.serial_no = 0,
+	.error = 0,
+};
+
 static void test_unsol_data_call_list_changed_invalid(gconstpointer data)
 {
 	struct ofono_error error;
@@ -201,6 +264,13 @@ static void test_unsol_data_call_list_changed_valid(gconstpointer data)
 			error.error == 0);
 }
 
+static void test_signal_strength_valid(gconstpointer data)
+{
+	const signal_strength_test *test = data;
+	int strength = g_ril_unsol_parse_signal_strength(NULL, &test->msg);
+	g_assert(strength == test->strength);
+}
+
 static void test_unsol_response_new_sms_valid(gconstpointer data)
 {
 	struct unsol_sms_data *sms_data;
@@ -222,6 +292,16 @@ static void test_unsol_supp_svc_notif_valid(gconstpointer data)
 						(struct ril_msg *) data);
 	g_assert(unsol != NULL);
 	g_ril_unsol_free_supp_svc_notif(unsol);
+}
+
+static void test_unsol_on_ussd_valid(gconstpointer data)
+{
+	struct unsol_ussd *unsol;
+
+	unsol = g_ril_unsol_parse_ussd(NULL, (struct ril_msg *) data);
+
+	g_assert(unsol != NULL);
+	g_ril_unsol_free_ussd(unsol);
 }
 
 int main(int argc, char **argv)
@@ -259,6 +339,16 @@ int main(int argc, char **argv)
 				"valid SUPP_SVC_NOTIF Test 1",
 				&unsol_supp_svc_notif_valid_1,
 				test_unsol_supp_svc_notif_valid);
+
+	g_test_add_data_func("/testgrilunsol/voicecall: "
+				"valid SIGNAL_STRENGTH Test 1",
+				&unsol_signal_strength_valid_1,
+				test_signal_strength_valid);
+
+	g_test_add_data_func("/testgrilunsol/ussd: "
+				"valid ON_USSD Test 1",
+				&unsol_on_ussd_valid_1,
+				test_unsol_on_ussd_valid);
 
 #endif
 	return g_test_run();

@@ -243,6 +243,84 @@ error:
 	return NULL;
 }
 
+int g_ril_unsol_parse_radio_state_changed(GRil *gril, const struct ril_msg *message)
+{
+	struct parcel rilp;
+	int radio_state;
+
+	g_ril_init_parcel(message, &rilp);
+
+	radio_state = parcel_r_int32(&rilp);
+
+	if (rilp.malformed) {
+		ofono_error("%s: malformed parcel received", __func__);
+		radio_state = -1;
+	}
+
+	g_ril_append_print_buf(gril, "(state: %s)",
+				ril_radio_state_to_string(radio_state));
+
+	g_ril_print_unsol(gril, message);
+
+	return radio_state;
+}
+int g_ril_unsol_parse_signal_strength(GRil *gril, const struct ril_msg *message)
+{
+	struct parcel rilp;
+	int gw_signal, cdma_dbm, evdo_dbm, lte_signal;
+
+	g_ril_init_parcel(message, &rilp);
+
+	/* RIL_SignalStrength_v6 */
+	/* GW_SignalStrength */
+	gw_signal = parcel_r_int32(&rilp);
+	parcel_r_int32(&rilp); /* bitErrorRate */
+
+	/* CDMA_SignalStrength */
+	cdma_dbm = parcel_r_int32(&rilp);
+	parcel_r_int32(&rilp); /* ecio */
+
+	/* EVDO_SignalStrength */
+	evdo_dbm = parcel_r_int32(&rilp);
+	parcel_r_int32(&rilp); /* ecio */
+	parcel_r_int32(&rilp); /* signalNoiseRatio */
+
+	/* LTE_SignalStrength */
+	lte_signal = parcel_r_int32(&rilp);
+	parcel_r_int32(&rilp); /* rsrp */
+	parcel_r_int32(&rilp); /* rsrq */
+	parcel_r_int32(&rilp); /* rssnr */
+	parcel_r_int32(&rilp); /* cqi */
+
+	g_ril_append_print_buf(gril, "(gw: %d, cdma: %d, evdo: %d, lte: %d)",
+				gw_signal, cdma_dbm, evdo_dbm, lte_signal);
+
+	if (message->unsolicited)
+		g_ril_print_unsol(gril, message);
+	else
+		g_ril_print_response(gril, message);
+
+	/* Return the first valid one */
+	if ((gw_signal != 99) && (gw_signal != -1))
+		return (gw_signal * 100) / 31;
+	if ((lte_signal != 99) && (lte_signal != -1))
+		return (lte_signal * 100) / 31;
+
+	/* In case of dbm, return the value directly */
+	if (cdma_dbm != -1) {
+		if (cdma_dbm > 100)
+			cdma_dbm = 100;
+		return cdma_dbm;
+	}
+	if (evdo_dbm != -1) {
+		if (evdo_dbm > 100)
+			evdo_dbm = 100;
+		return evdo_dbm;
+	}
+
+	return -1;
+}
+
 void g_ril_unsol_free_supp_svc_notif(struct unsol_supp_svc_notif *unsol)
 {
 	g_free(unsol);
@@ -278,4 +356,59 @@ struct unsol_supp_svc_notif *g_ril_unsol_parse_supp_svc_notif(GRil *gril,
 	g_ril_print_unsol(gril, message);
 
 	return unsol;
+}
+
+void g_ril_unsol_free_ussd(struct unsol_ussd *unsol)
+{
+	if (unsol != NULL) {
+		g_free(unsol->message);
+		g_free(unsol);
+	}
+}
+
+struct unsol_ussd *g_ril_unsol_parse_ussd(GRil *gril, struct ril_msg *message)
+{
+	struct parcel rilp;
+	struct unsol_ussd *ussd;
+	char *typestr = NULL;
+	int numstr;
+
+	ussd = g_try_malloc0(sizeof(*ussd));
+	if (ussd == NULL) {
+		ofono_error("%s out of memory", __func__);
+		goto error;
+	}
+
+	g_ril_init_parcel(message, &rilp);
+
+	numstr = parcel_r_int32(&rilp);
+	if (numstr < 1) {
+		ofono_error("%s malformed parcel", __func__);
+		goto error;
+	}
+
+	typestr = parcel_r_string(&rilp);
+	if (typestr == NULL || *typestr == '\0') {
+		ofono_error("%s wrong type", __func__);
+		goto error;
+	}
+
+	ussd->type = *typestr - '0';
+
+	g_free(typestr);
+
+	if (numstr > 1)
+		ussd->message = parcel_r_string(&rilp);
+
+	g_ril_append_print_buf(gril, "{%d,%s}", ussd->type, ussd->message);
+
+	g_ril_print_unsol(gril, message);
+
+	return ussd;
+
+error:
+	g_free(typestr);
+	g_free(ussd);
+
+	return NULL;
 }
