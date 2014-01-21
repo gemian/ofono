@@ -1011,10 +1011,19 @@ static void test_request_set_clir(gconstpointer data)
 
 	parcel_free(&rilp);
 }
+#endif
 
 int main(int argc, char **argv)
 {
 	g_test_init(&argc, &argv, NULL);
+
+/*
+ * As all our architectures are little-endian except for
+ * PowerPC, and the Binder wire-format differs slightly
+ * depending on endian-ness, the following guards against test
+ * failures when run on PowerPC.
+ */
+#if BYTE_ORDER == LITTLE_ENDIAN
 
 	g_test_add_data_func("/testgrilrequest/gprs-context: "
 				"invalid DEACTIVATE_DATA_CALL Test 1",

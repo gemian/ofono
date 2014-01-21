@@ -311,10 +311,18 @@ static void test_unsol_on_ussd_valid(gconstpointer data)
 	g_assert(unsol != NULL);
 	g_ril_unsol_free_ussd(unsol);
 }
+#endif
 
 int main(int argc, char **argv)
 {
 	g_test_init(&argc, &argv, NULL);
+/*
+ * As all our architectures are little-endian except for
+ * PowerPC, and the Binder wire-format differs slightly
+ * depending on endian-ness, the following guards against test
+ * failures when run on PowerPC.
+ */
+#if BYTE_ORDER == LITTLE_ENDIAN
 
 	g_test_add_data_func("/testgrilunsol/gprs-context: "
 				"invalid DATA_CALL_LIST_CHANGED Test 1",
