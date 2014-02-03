@@ -1,4 +1,4 @@
-ofono (1.12+bzr6851-0ubuntu2) UNRELEASED; urgency=low
+ofono (1.12+bzr6851-0ubuntu3) UNRELEASED; urgency=low
   [ Tony Espy ]
   * unit: fix fail-to-build on powerpc
     The previously released version enabled -Wall,
@@ -9,7 +9,13 @@ ofono (1.12+bzr6851-0ubuntu2) UNRELEASED; urgency=low
     and data.  This change exends the ifdef to cover
     the unused functions and test data.
 
- -- tony espy <espy@canonical.com>  Tue, 21 Jan 2014 13:54:46 -0500
+  * idmap: use UL for bitshift literals (LP: #1271284)
+    This change fixes a failing unit test on ppc64le
+    due to the undefined behavior when the left bitshift
+    operator is given a value that excedes the size of
+    the value being shifted.
+
+ -- Tony Espy <espy@canonical.com>  Mon, 03 Feb 2014 16:28:46 -0500
 
 ofono (1.12+bzr6851-0ubuntu1) trusty; urgency=low
 
