@@ -1,4 +1,4 @@
-ofono (1.12+bzr6851-0ubuntu2) UNRELEASED; urgency=low
+ofono (1.12+bzr6856-0ubuntu1) trusty; urgency=low
 
   [ Tony Espy ]
   * unit: fix fail-to-build on powerpc
