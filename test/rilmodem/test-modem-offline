@@ -1,0 +1,52 @@
+#!/usr/bin/python3
+#
+#  oFono - Open Source Telephony - RIL Modem test
+#
+#  Copyright (C) 2014 Canonical Ltd.
+#
+#  This program is free software; you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License version 2 as
+#  published by the Free Software Foundation.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with this program; if not, write to the Free Software
+#  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+#
+# This test ensures that basic modem information is available
+# when the modem is offline.
+
+import dbus
+
+bus = dbus.SystemBus()
+
+manager = dbus.Interface(bus.get_object('org.ofono', '/'),
+						'org.ofono.Manager')
+
+modems = manager.GetModems()
+
+for path, properties in modems:
+	print("[ %s ]" % (path))
+
+	keys = list(properties.keys())
+
+	assert keys.index('Online') != "ValueError"
+	assert keys.index("Powered") != "ValueError"
+	assert keys.index("Emergency") != "ValueError"
+	assert keys.index("Lockdown") != "ValueError"
+	assert keys.index("Serial") != "ValueError"
+	assert keys.index("Revision") != "ValueError"
+	assert keys.index("Interfaces") != "ValueError"
+
+	assert properties['Online'] == 0
+	assert properties['Powered'] == 1
+	assert properties['Emergency'] == 0
+	assert properties["Lockdown"] == 0
+	assert properties["Serial"].isalnum()
+	assert properties["Revision"].isalnum() 
+
+	print("OK\n")

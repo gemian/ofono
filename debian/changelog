@@ -22,11 +22,23 @@ ofono (1.12+bzr6851-0ubuntu2) UNRELEASED; urgency=low
     - add additional unit tests to cover crash scenarios.
   * ril, src: enable message-waiting-interface
     - register message_waiting atom in ril plugin
+    - register message_waiting atom in ril plugin
     - fix sms_mwi_dcs_decode bug which prevented incoming message
       waiting indications from being set.
   * rilmodem/voicecall: fix call-decline bug (LP: #1260988)
     Send a RIL_REQUEST_HANGUP_WAITING_OR_BACKGROUND instead of
-    RIL_REQUEST_HANGUP for incoming calls.
+    was used correctly for displaying operator name, however
+    some modems failed to handle roaming correctly for MVNOs.
+    This fix is transparent to modems that do the right thing.
+  * gril/gril.c, plugins/ril.c: API changes for OEMS
+    This change introduces a socket-path to the g_ril_new()
+    function, and also adds a new disconnect function.
+  * gril/grilunsol.c: add support for v5 signal strength message
+  * debian/control: adjust ofono-scripts dependencies for Python 3
+  * test/rilmodem: add copyright/license headers
+
+  [ Martin Pitt ]
+  * test: convert tests scripts to Python 3 (LP: #1283571)
 
  -- Ricardo Salveti de Araujo <ricardo.salveti@canonical.com>  Fri, 28 Feb 2014 17:50:54 -0300
 
