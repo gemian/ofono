@@ -37,6 +37,9 @@ ofono (1.12+bzr6851-0ubuntu2) UNRELEASED; urgency=low
   [ Martin Pitt ]
   * test: convert tests scripts to Python 3 (LP: #1283571)
 
+  [ Tony Espy ]
+  * debian/control: adjust ofono-scripts dependencies for Python 3
+
  -- Tony Espy <espy@canonical.com>  Tue, 21 Jan 2014 13:54:46 -0500
 
 ofono (1.12+bzr6851-0ubuntu1) trusty; urgency=low
