@@ -8,11 +8,8 @@ try:
 	manager = dbus.Interface(bus.get_object('org.ofono', '/'),
 						'org.ofono.Manager')
 except dbus.exceptions.DBusException as e:
-	if e.get_dbus_name() == 'org.freedesktop.DBus.Error.ServiceUnknown':
-		print("Service org.ofono not found on DBus: {}".format(e))	
-		exit(1)
-	else:
-		raise
+       print("Service org.ofono not found on DBus: {}".format(e))	
+       exit(1)
 
 modems = manager.GetModems()
 
