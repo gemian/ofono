@@ -78,7 +78,7 @@ Depends: ${shlibs:Depends},
          ${misc:Depends},
          ofono (>= ${source:Version}),
 	 python3,
-	 python-dbus,
+	 python3-dbus,
 	 python3-gi
 Description: Mobile telephony stack (test and maintenance script files)
  oFono is a stack for mobile telephony devices on Linux.  oFono supports
