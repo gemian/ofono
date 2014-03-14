@@ -1,6 +1,10 @@
 ofono (1.12+bzr6858-0ubuntu2) UNRELEASED; urgency=medium
 
+  [ Dimitri John Ledkov ]
   * Correct ofono-scripts dependency on python3-dbus, not python-dbus.
+
+  [ Tony Espy ]
+  * src: fix build-failure on ppc64le arch
 
  -- Dimitri John Ledkov <xnox@ubuntu.com>  Thu, 06 Mar 2014 14:10:44 +0000
 
