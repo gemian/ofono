@@ -5,6 +5,7 @@ ofono (1.12+14.04.20140317-0ubuntu1) UNRELEASED; urgency=medium
 
   [ Tony Espy ]
   * src: fix build-failure on ppc64le arch
+  * btio: fix build-failure on ppc64le arch
 
  -- Dimitri John Ledkov <xnox@ubuntu.com>  Thu, 06 Mar 2014 14:10:44 +0000
 
