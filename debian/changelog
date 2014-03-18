@@ -1,4 +1,4 @@
-ofono (1.12.bzr6858+14.04.20140317-0ubuntu1) UNRELEASED; urgency=medium
+ofono (1.12.bzr6858+14.04.20140318-0ubuntu1) trusty; urgency=medium
 
   [ Dimitri John Ledkov ]
   * Correct ofono-scripts dependency on python3-dbus, not python-dbus.
@@ -10,7 +10,7 @@ ofono (1.12.bzr6858+14.04.20140317-0ubuntu1) UNRELEASED; urgency=medium
   [ Sergio Schvezov ]
   * Changing version to cope with citrain 
 
- -- Dimitri John Ledkov <xnox@ubuntu.com>  Thu, 06 Mar 2014 14:10:44 +0000
+ -- Ubuntu daily release <ps-jenkins@lists.canonical.com>  Tue, 18 Mar 2014 12:04:21 +0000
 
 ofono (1.12+bzr6858-0ubuntu1) trusty; urgency=medium
 
