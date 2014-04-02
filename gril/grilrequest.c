@@ -3,7 +3,7 @@
  *  RIL library with GLib integration
  *
  *  Copyright (C) 2008-2011  Intel Corporation. All rights reserved.
- *  Copyright (C) 2012-2013  Canonical Ltd.
+ *  Copyright (C) 2012-2014  Canonical Ltd.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2 as
@@ -411,7 +411,7 @@ gboolean g_ril_request_sim_read_record(GRil *gril,
 
 	g_ril_append_print_buf(gril,
 				"(cmd=0x%.2X,efid=0x%.4X,",
-				CMD_GET_RESPONSE,
+				CMD_READ_RECORD,
 				req->fileid);
 
 	if (set_path(gril, req->app_type, rilp, req->fileid,
@@ -424,6 +424,113 @@ gboolean g_ril_request_sim_read_record(GRil *gril,
 	parcel_w_string(rilp, NULL);       /* data; only req'd for writes */
 	parcel_w_string(rilp, NULL);       /* pin2; only req'd for writes */
 	parcel_w_string(rilp, req->aid_str); /* AID (Application ID) */
+
+	return TRUE;
+
+error:
+	return FALSE;
+}
+
+gboolean g_ril_request_sim_write_binary(GRil *gril,
+					const struct req_sim_write_binary *req,
+					struct parcel *rilp)
+{
+	char *hex_data;
+	int p1, p2;
+
+	parcel_init(rilp);
+	parcel_w_int32(rilp, CMD_UPDATE_BINARY);
+	parcel_w_int32(rilp, req->fileid);
+
+	g_ril_append_print_buf(gril, "(cmd=0x%02X,efid=0x%04X,",
+				CMD_UPDATE_BINARY, req->fileid);
+
+	if (set_path(gril, req->app_type, rilp, req->fileid,
+			req->path, req->path_len) == FALSE)
+		goto error;
+
+	p1 = req->start >> 8;
+	p2 = req->start & 0xff;
+	hex_data = encode_hex(req->data, req->length, 0);
+
+	parcel_w_int32(rilp, p1);		/* P1 */
+	parcel_w_int32(rilp, p2);		/* P2 */
+	parcel_w_int32(rilp, req->length);	/* P3 (Lc) */
+	parcel_w_string(rilp, hex_data);	/* data */
+	parcel_w_string(rilp, NULL);		/* pin2; only for FDN/BDN */
+	parcel_w_string(rilp, req->aid_str);	/* AID (Application ID) */
+
+	g_ril_append_print_buf(gril,
+				"%s%d,%d,%d,%s,pin2=(null),aid=%s)",
+				print_buf,
+				p1,
+				p2,
+				req->length,
+				hex_data,
+				req->aid_str);
+
+	g_free(hex_data);
+
+	return TRUE;
+
+error:
+	return FALSE;
+}
+
+static int get_sim_record_access_p2(enum req_record_access_mode mode)
+{
+	switch (mode) {
+	case GRIL_REC_ACCESS_MODE_CURRENT:
+		return 4;
+	case GRIL_REC_ACCESS_MODE_ABSOLUTE:
+		return 4;
+	case GRIL_REC_ACCESS_MODE_NEXT:
+		return 2;
+	case GRIL_REC_ACCESS_MODE_PREVIOUS:
+		return 3;
+	}
+
+	return -1;
+}
+
+gboolean g_ril_request_sim_write_record(GRil *gril,
+					const struct req_sim_write_record *req,
+					struct parcel *rilp)
+{
+	char *hex_data;
+	int p2;
+
+	parcel_init(rilp);
+	parcel_w_int32(rilp, CMD_UPDATE_RECORD);
+	parcel_w_int32(rilp, req->fileid);
+
+	g_ril_append_print_buf(gril, "(cmd=0x%02X,efid=0x%04X,",
+				CMD_UPDATE_RECORD, req->fileid);
+
+	if (set_path(gril, req->app_type, rilp, req->fileid,
+			req->path, req->path_len) == FALSE)
+		goto error;
+
+	p2 = get_sim_record_access_p2(req->mode);
+	hex_data = encode_hex(req->data, req->length, 0);
+
+	parcel_w_int32(rilp, req->record);	/* P1 */
+	parcel_w_int32(rilp, p2);		/* P2 (access mode) */
+	parcel_w_int32(rilp, req->length);	/* P3 (Lc) */
+	parcel_w_string(rilp, hex_data);	/* data */
+	parcel_w_string(rilp, NULL);		/* pin2; only for FDN/BDN */
+	parcel_w_string(rilp, req->aid_str);	/* AID (Application ID) */
+
+	g_ril_append_print_buf(gril,
+				"%s%d,%d,%d,%s,pin2=(null),aid=%s)",
+				print_buf,
+				req->record,
+				p2,
+				req->length,
+				hex_data,
+				req->aid_str);
+
+	g_free(hex_data);
 
 	return TRUE;
 
@@ -779,4 +886,54 @@ void g_ril_request_set_clir(GRil *gril,
 	parcel_w_int32(rilp, mode);
 
 	g_ril_append_print_buf(gril, "(%d)", mode);
+}
+
+void g_ril_request_call_fwd(GRil *gril,	const struct req_call_fwd *req,
+				struct parcel *rilp)
+{
+	parcel_init(rilp);
+
+	parcel_w_int32(rilp, req->action);
+	parcel_w_int32(rilp, req->type);
+	parcel_w_int32(rilp, req->cls);
+
+	g_ril_append_print_buf(gril, "(type: %d cls: %d ", req->type, req->cls);
+
+	if (req->number != NULL) {
+		parcel_w_int32(rilp, req->number->type);
+		parcel_w_string(rilp, (char *) req->number->number);
+
+		g_ril_append_print_buf(gril, "%s number type: %d number: "
+					"%s time: %d) ", print_buf,
+					req->number->type, req->number->number,
+					req->time);
+	} else {
+		/*
+		 * The following values have no real meaning for
+		 * activation/deactivation/erasure actions, but
+		 * apparently rild expects them, so fields need to
+		 * be filled. Otherwise there is no response.
+		 */
+
+		parcel_w_int32(rilp, 0x81);		/* TOA unknown */
+		parcel_w_string(rilp, "1234567890");
+		g_ril_append_print_buf(gril, "%s number type: %d number: "
+					"%s time: %d) ", print_buf,
+					0x81, "1234567890",
+					req->time);
+
+	}
+
+	parcel_w_int32(rilp, req->time);
+}
+
+void g_ril_request_set_preferred_network_type(GRil *gril, int net_type,
+						struct parcel *rilp)
+{
+	parcel_init(rilp);
+
+	parcel_w_int32(rilp, 1);	/* Number of params */
+	parcel_w_int32(rilp, net_type);
+
+	g_ril_append_print_buf(gril, "(%d)", net_type);
 }

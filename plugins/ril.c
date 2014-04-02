@@ -3,7 +3,7 @@
  *  oFono - Open Source Telephony - RIL-based devices
  *
  *  Copyright (C) 2008-2011  Intel Corporation. All rights reserved.
- *  Copyright (C) 2012-2013 Canonical Ltd.
+ *  Copyright (C) 2012-2014 Canonical Ltd.
  *  Copyright (C) 2013 Jolla Ltd.
  *
  *  This program is free software; you can redistribute it and/or modify
@@ -271,14 +271,25 @@ static void ril_post_sim(struct ofono_modem *modem)
 	gprs = ofono_gprs_create(modem, 0, RILMODEM, ril->modem);
 	gc = ofono_gprs_context_create(modem, 0, RILMODEM, ril->modem);
 
-	if (gprs && gc) {
-		DBG("calling gprs_add_context");
+	if (gc) {
+		ofono_gprs_context_set_type(gc,
+					OFONO_GPRS_CONTEXT_TYPE_INTERNET);
+		ofono_gprs_add_context(gprs, gc);
+	}
+
+	gc = ofono_gprs_context_create(modem, 0, RILMODEM, ril->modem);
+
+	if (gc) {
+		ofono_gprs_context_set_type(gc,
+					OFONO_GPRS_CONTEXT_TYPE_MMS);
 		ofono_gprs_add_context(gprs, gc);
 	}
 
 	mw = ofono_message_waiting_create(modem);
 	if (mw)
 		ofono_message_waiting_register(mw);
+
+	ofono_call_forwarding_create(modem, 0, RILMODEM, ril->modem);
 }
 
 static void ril_post_online(struct ofono_modem *modem)
@@ -289,6 +300,7 @@ static void ril_post_online(struct ofono_modem *modem)
 	ofono_netreg_create(modem, 0, RILMODEM, ril->modem);
 	ofono_ussd_create(modem, 0, RILMODEM, ril->modem);
 	ofono_call_settings_create(modem, 0, RILMODEM, ril->modem);
+	ofono_radio_settings_create(modem, 0, RILMODEM, ril->modem);
 }
 
 static void ril_set_online_cb(struct ril_msg *message, gpointer user_data)
@@ -424,62 +436,16 @@ static struct ofono_modem_driver ril_driver = {
 };
 
 /*
- * Note - as an aal+ container doesn't include a running udev,
- * the udevng plugin will never detect a modem, and thus modem
- * creation for a RIL-based modem needs to be hard-coded.
- *
- * Typically, udevng would create the modem, which in turn would
- * lead to this plugin's probe function being called.
- *
- * This is a first attempt at registering like this.
- *
- * IMPORTANT - this code relies on the fact that the 'rilmodem' is
- * added to top-level Makefile's builtin_modules *after* 'ril'.
- * This has means 'rilmodem' will already be registered before we try
- * to create and register the modem.  In standard ofono, 'udev'/'udevng'
- * is initialized last due to the fact that it's the first module
- * added in the top-level Makefile.
+ * This plugin is a generic ( aka default ) device plugin for RIL-based devices.
+ * The plugin 'rildev' is used to determine which RIL plugin should be loaded
+ * based upon an environment variable.
  */
 static int ril_init(void)
 {
 	int retval = 0;
-	struct ofono_modem *modem;
 
-	if ((retval = ofono_modem_driver_register(&ril_driver))) {
+	if ((retval = ofono_modem_driver_register(&ril_driver)))
 		DBG("ofono_modem_driver_register returned: %d", retval);
-		return retval;
-	}
-
-	/* everything after _modem_driver_register, is
-	 * non-standard ( see udev comment above ).
-	 * usually called by undevng::create_modem
-	 *
-	 * args are name (optional) & type
-	 */
-	modem = ofono_modem_create(NULL, "ril");
-	if (modem == NULL) {
-		DBG("ofono_modem_create failed for ril");
-		return -ENODEV;
-	}
-
-	/* This causes driver->probe() to be called... */
-	retval = ofono_modem_register(modem);
-	DBG("ofono_modem_register returned: %d", retval);
-
-	/* kickstart the modem:
-	 * causes core modem code to call
-	 * - set_powered(TRUE) - which in turn
-	 *   calls driver->enable()
-	 *
-	 * - driver->pre_sim()
-	 *
-	 * Could also be done via:
-	 *
-	 * - a DBus call to SetProperties w/"Powered=TRUE" *1
-	 * - sim_state_watch ( handles SIM removal? LOCKED states? **2
-	 * - ofono_modem_set_powered()
-	 */
-        ofono_modem_reset(modem);
 
 	return retval;
 }

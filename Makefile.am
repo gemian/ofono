@@ -118,6 +118,9 @@ endif
 if RILMODEM
 builtin_sources += $(gril_sources)
 
+builtin_modules += rildev
+builtin_sources += plugins/rildev.c
+
 builtin_modules += ril
 builtin_sources += plugins/ril.c
 
@@ -135,7 +138,9 @@ builtin_sources += drivers/rilmodem/rilmodem.h \
 			drivers/rilmodem/rilutil.c \
 			drivers/rilmodem/rilutil.h \
 			drivers/rilmodem/ussd.c \
-			drivers/rilmodem/call-settings.c
+			drivers/rilmodem/call-settings.c \
+			drivers/rilmodem/call-forwarding.c \
+			drivers/rilmodem/radio-settings.c
 
 endif
 
@@ -480,9 +485,13 @@ endif
 
 if PROVISION
 builtin_sources += plugins/mbpi.h plugins/mbpi.c
+builtin_sources += plugins/android-apndb.h plugins/android-apndb.c
 
 builtin_modules += provision
 builtin_sources += plugins/provision.c
+
+builtin_modules += android_provision
+builtin_sources += plugins/android-provision.c
 
 builtin_modules += cdma_provision
 builtin_sources += plugins/cdma-provision.c
