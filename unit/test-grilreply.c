@@ -1736,7 +1736,6 @@ int main(int argc, char **argv)
  */
 #if BYTE_ORDER == LITTLE_ENDIAN
 
-
 	g_test_add_data_func("/testgrilreply/gprs-context: "
 				"invalid SETUP_DATA_CALL Test 1",
 				&reply_data_call_invalid_1,
