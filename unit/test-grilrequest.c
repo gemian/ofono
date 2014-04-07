@@ -1145,7 +1145,6 @@ static void test_request_set_clir(gconstpointer data)
 
 	parcel_free(&rilp);
 }
-#endif
 
 static void test_request_set_preferred_network_type(gconstpointer data)
 {
@@ -1161,6 +1160,7 @@ static void test_request_set_preferred_network_type(gconstpointer data)
 
 	parcel_free(&rilp);
 }
+#endif
 
 int main(int argc, char **argv)
 {

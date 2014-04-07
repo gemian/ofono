@@ -316,6 +316,7 @@ static void test_unsol_on_ussd_valid(gconstpointer data)
 int main(int argc, char **argv)
 {
 	g_test_init(&argc, &argv, NULL);
+
 /*
  * As all our architectures are little-endian except for
  * PowerPC, and the Binder wire-format differs slightly
