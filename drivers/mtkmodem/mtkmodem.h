@@ -1,10 +1,9 @@
 /*
  *
- *  oFono - Open Source Telephony
+ *  oFono - Open Source Telephony - RIL Modem Support
  *
  *  Copyright (C) 2008-2011  Intel Corporation. All rights reserved.
- *                2013 Simon Busch <morphis@gravedo.de>
- *  Copyright (C) 2014 Canonical Ltd.
+ *  Copyright (C) 2014  Canonical Ltd.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2 as
@@ -21,13 +20,10 @@
  *
  */
 
-struct apndb_provision_data {
-	struct ofono_gprs_provision_data gprs_data;
-	gboolean mvno;
-};
+#define MTKMODEM "mtkmodem"
 
-void android_apndb_ap_free(gpointer data);
+extern void mtk_voicecall_init(void);
+extern void mtk_voicecall_exit(void);
 
-GSList *android_apndb_lookup_apn(const char *mcc, const char *mnc,
-			const char *spn, const char *imsi, const char *gid1,
-			gboolean *mvno_found, GError **error);
+extern void mtk_gprs_init(void);
+extern void mtk_gprs_exit(void);

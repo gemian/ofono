@@ -1,10 +1,9 @@
 /*
  *
- *  oFono - Open Source Telephony
+ *  oFono - Open Source Telephony - RIL Modem Support
  *
  *  Copyright (C) 2008-2011  Intel Corporation. All rights reserved.
- *                2013 Simon Busch <morphis@gravedo.de>
- *  Copyright (C) 2014 Canonical Ltd.
+ *  Copyright (C) 2014  Canonical, Ltd. All rights reserved.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2 as
@@ -21,13 +20,37 @@
  *
  */
 
-struct apndb_provision_data {
-	struct ofono_gprs_provision_data gprs_data;
-	gboolean mvno;
-};
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
 
-void android_apndb_ap_free(gpointer data);
+#include <glib.h>
+#include <gril.h>
 
-GSList *android_apndb_lookup_apn(const char *mcc, const char *mnc,
-			const char *spn, const char *imsi, const char *gid1,
-			gboolean *mvno_found, GError **error);
+#define OFONO_API_SUBJECT_TO_CHANGE
+#include <ofono/plugin.h>
+#include <ofono/log.h>
+#include <ofono/types.h>
+
+#include "mtkmodem.h"
+
+static int mtkmodem_init(void)
+{
+	DBG("");
+
+	mtk_voicecall_init();
+	mtk_gprs_init();
+
+	return 0;
+}
+
+static void mtkmodem_exit(void)
+{
+	DBG("");
+
+	mtk_voicecall_exit();
+	mtk_gprs_exit();
+}
+
+OFONO_PLUGIN_DEFINE(mtkmodem, "MTK modem driver", VERSION,
+		OFONO_PLUGIN_PRIORITY_DEFAULT, mtkmodem_init, mtkmodem_exit)

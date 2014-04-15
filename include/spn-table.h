@@ -1,10 +1,8 @@
 /*
  *
- *  oFono - Open Source Telephony
+ *  oFono - Open Telephony stack for Linux
  *
- *  Copyright (C) 2008-2011  Intel Corporation. All rights reserved.
- *                2013 Simon Busch <morphis@gravedo.de>
- *  Copyright (C) 2014 Canonical Ltd.
+ *  Copyright (C) 2014  Canonical Ltd.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2 as
@@ -21,13 +19,27 @@
  *
  */
 
-struct apndb_provision_data {
-	struct ofono_gprs_provision_data gprs_data;
-	gboolean mvno;
+#ifndef OFONO_SPN_TABLE_H
+#define OFONO_SPN_TABLE_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+struct ofono_spn_table_driver {
+	const char *name;
+	const char *(*get_spn)(const char *numeric);
 };
 
-void android_apndb_ap_free(gpointer data);
+const char *__ofono_spn_table_get_spn(const char *numeric);
 
-GSList *android_apndb_lookup_apn(const char *mcc, const char *mnc,
-			const char *spn, const char *imsi, const char *gid1,
-			gboolean *mvno_found, GError **error);
+int ofono_spn_table_driver_register(struct ofono_spn_table_driver *driver);
+
+void ofono_spn_table_driver_unregister(
+			const struct ofono_spn_table_driver *driver);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* OFONO_SPN_TABLE_H */

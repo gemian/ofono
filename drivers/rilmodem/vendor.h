@@ -2,9 +2,7 @@
  *
  *  oFono - Open Source Telephony
  *
- *  Copyright (C) 2008-2011  Intel Corporation. All rights reserved.
- *                2013 Simon Busch <morphis@gravedo.de>
- *  Copyright (C) 2014 Canonical Ltd.
+ *  Copyright (C) 2014  Canonical Ltd. All rights reserved.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2 as
@@ -21,13 +19,12 @@
  *
  */
 
-struct apndb_provision_data {
-	struct ofono_gprs_provision_data gprs_data;
-	gboolean mvno;
+#ifndef RILMODEM_VENDOR_H
+#define RILMODEM_VENDOR_H
+
+enum ofono_ril_vendor {
+	OFONO_RIL_VENDOR_AOSP = 0,
+	OFONO_RIL_VENDOR_MTK
 };
 
-void android_apndb_ap_free(gpointer data);
-
-GSList *android_apndb_lookup_apn(const char *mcc, const char *mnc,
-			const char *spn, const char *imsi, const char *gid1,
-			gboolean *mvno_found, GError **error);
+#endif /* RILMODEM_VENDOR_H */

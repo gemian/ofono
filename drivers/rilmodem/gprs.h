@@ -2,9 +2,7 @@
  *
  *  oFono - Open Source Telephony
  *
- *  Copyright (C) 2008-2011  Intel Corporation. All rights reserved.
- *                2013 Simon Busch <morphis@gravedo.de>
- *  Copyright (C) 2014 Canonical Ltd.
+ *  Copyright (C) 2014  Canonical Ltd.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2 as
@@ -21,13 +19,19 @@
  *
  */
 
-struct apndb_provision_data {
-	struct ofono_gprs_provision_data gprs_data;
-	gboolean mvno;
+struct ril_gprs_data {
+	GRil *ril;
+	gboolean ofono_attached;
+	unsigned int max_cids;
+	int rild_status;
+	int tech;
+	int state_changed_unsol;
 };
 
-void android_apndb_ap_free(gpointer data);
-
-GSList *android_apndb_lookup_apn(const char *mcc, const char *mnc,
-			const char *spn, const char *imsi, const char *gid1,
-			gboolean *mvno_found, GError **error);
+int ril_gprs_probe(struct ofono_gprs *gprs, unsigned int vendor, void *data);
+void ril_gprs_remove(struct ofono_gprs *gprs);
+void ril_gprs_start(GRil *ril, struct ofono_gprs *gprs,
+			struct ril_gprs_data *gd);
+gboolean ril_gprs_set_attached_cb(gpointer user_data);
+void ril_gprs_registration_status(struct ofono_gprs *gprs,
+					ofono_gprs_status_cb_t cb, void *data);

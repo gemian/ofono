@@ -1,9 +1,7 @@
 /*
  *
- *  oFono - Open Source Telephony
+ *  RIL constants for MTK modem
  *
- *  Copyright (C) 2008-2011  Intel Corporation. All rights reserved.
- *                2013 Simon Busch <morphis@gravedo.de>
  *  Copyright (C) 2014 Canonical Ltd.
  *
  *  This program is free software; you can redistribute it and/or modify
@@ -21,13 +19,21 @@
  *
  */
 
-struct apndb_provision_data {
-	struct ofono_gprs_provision_data gprs_data;
-	gboolean mvno;
-};
+#ifndef MTK_CONSTANTS_H
+#define MTK_CONSTANTS_H
 
-void android_apndb_ap_free(gpointer data);
+/* RIL Request Messages */
+#define RIL_REQUEST_RADIO_POWEROFF 2011
+#define RIL_REQUEST_DUAL_SIM_MODE_SWITCH 2012
+#define RIL_REQUEST_SET_GPRS_CONNECT_TYPE 2016
+#define RIL_REQUEST_SET_GPRS_TRANSFER_TYPE 2017
+#define RIL_REQUEST_RADIO_POWERON 2033
+#define RIL_REQUEST_SET_CALL_INDICATION 2036
 
-GSList *android_apndb_lookup_apn(const char *mcc, const char *mnc,
-			const char *spn, const char *imsi, const char *gid1,
-			gboolean *mvno_found, GError **error);
+/* RIL Unsolicited Messages */
+#define RIL_UNSOL_RADIO_TEMPORARILY_UNAVAILABLE 3008
+#define RIL_UNSOL_CALL_PROGRESS_INFO 3004
+#define RIL_UNSOL_INCOMING_CALL_INDICATION 3014
+#define RIL_UNSOL_RESPONSE_PS_NETWORK_STATE_CHANGED 3022
+
+#endif /* MTK_CONSTANTS_H */
