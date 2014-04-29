@@ -24,6 +24,7 @@
 #define __GRILREPLY_H
 
 #include <ofono/types.h>
+#include <ofono/sim.h>
 
 #include "gril.h"
 
@@ -51,19 +52,6 @@ struct reply_reg_state {
 	int tech;
 	int reason;
 	unsigned int max_cids;
-};
-
-struct reply_setup_data_call {
-	guint version;
-	guint status;
-	gint cid;
-	guint retry_time;
-	guint active;
-	guint protocol;
-	gchar *ifname;
-	gchar **dns_addresses;
-	gchar **gateways;
-	gchar **ip_addrs;
 };
 
 struct reply_sim_io {
@@ -109,12 +97,6 @@ void g_ril_reply_free_operator(struct reply_operator *reply);
 
 struct reply_operator *g_ril_reply_parse_operator(GRil *gril,
 						const struct ril_msg *message);
-
-void g_ril_reply_free_setup_data_call(struct reply_setup_data_call *reply);
-
-struct reply_setup_data_call *g_ril_reply_parse_data_call(GRil *gril,
-						const struct ril_msg *message,
-						struct ofono_error *error);
 
 void g_ril_reply_free_sim_io(struct reply_sim_io *reply);
 
@@ -174,6 +156,9 @@ int g_ril_reply_parse_query_facility_lock(GRil *gril,
 
 int g_ril_reply_parse_set_facility_lock(GRil *gril,
 					const struct ril_msg *message);
+
+int *g_ril_reply_parse_retries(GRil *gril, const struct ril_msg *message,
+				enum ofono_sim_password_type passwd_type);
 
 #ifdef __cplusplus
 }
