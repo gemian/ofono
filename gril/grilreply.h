@@ -3,7 +3,7 @@
  *  RIL library with GLib integration
  *
  *  Copyright (C) 2008-2011  Intel Corporation. All rights reserved.
- *  Copyright (C) 2012-2013  Canonical Ltd.
+ *  Copyright (C) 2012-2014  Canonical Ltd.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2 as
@@ -24,6 +24,7 @@
 #define __GRILREPLY_H
 
 #include <ofono/types.h>
+#include <ofono/sim.h>
 
 #include "gril.h"
 
@@ -36,6 +37,7 @@ struct reply_operator {
 	char *salpha;
 	char *numeric;
 	char *status;
+	int tech;
 };
 
 struct reply_avail_ops {
@@ -50,19 +52,6 @@ struct reply_reg_state {
 	int tech;
 	int reason;
 	unsigned int max_cids;
-};
-
-struct reply_setup_data_call {
-	guint version;
-	guint status;
-	gint cid;
-	guint retry_time;
-	guint active;
-	guint protocol;
-	gchar *ifname;
-	gchar **dns_addresses;
-	gchar **gateways;
-	gchar **ip_addrs;
 };
 
 struct reply_sim_io {
@@ -109,12 +98,6 @@ void g_ril_reply_free_operator(struct reply_operator *reply);
 struct reply_operator *g_ril_reply_parse_operator(GRil *gril,
 						const struct ril_msg *message);
 
-void g_ril_reply_free_setup_data_call(struct reply_setup_data_call *reply);
-
-struct reply_setup_data_call *g_ril_reply_parse_data_call(GRil *gril,
-						const struct ril_msg *message,
-						struct ofono_error *error);
-
 void g_ril_reply_free_sim_io(struct reply_sim_io *reply);
 
 struct reply_sim_io *g_ril_reply_parse_sim_io(GRil *gril,
@@ -159,6 +142,23 @@ void g_ril_reply_free_get_clir(struct reply_clir *rclir);
 
 struct reply_clir *g_ril_reply_parse_get_clir(GRil *gril,
 						const struct ril_msg *message);
+
+struct ofono_call_forwarding_condition
+	*g_ril_reply_parse_query_call_fwd(GRil *gril,
+						const struct ril_msg *message,
+						unsigned int *list_size);
+
+int g_ril_reply_parse_get_preferred_network_type(GRil *gril,
+						const struct ril_msg *message);
+
+int g_ril_reply_parse_query_facility_lock(GRil *gril,
+						const struct ril_msg *message);
+
+int g_ril_reply_parse_set_facility_lock(GRil *gril,
+					const struct ril_msg *message);
+
+int *g_ril_reply_parse_retries(GRil *gril, const struct ril_msg *message,
+				enum ofono_sim_password_type passwd_type);
 
 #ifdef __cplusplus
 }

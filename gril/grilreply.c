@@ -3,7 +3,9 @@
  *  RIL library with GLib integration
  *
  *  Copyright (C) 2008-2011  Intel Corporation. All rights reserved.
- *  Copyright (C) 2012-2013  Canonical Ltd.
+ *  Copyright (C) 2013 Jolla Ltd
+ *  Contact: Jussi Kangas <jussi.kangas@tieto.com>
+ *  Copyright (C) 2012-2014  Canonical Ltd.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2 as
@@ -33,6 +35,7 @@
 
 #include <ofono/log.h>
 #include <ofono/modem.h>
+#include <ofono/call-forwarding.h>
 #include <ofono/gprs-context.h>
 
 #include "common.h"
@@ -41,110 +44,6 @@
 #include "grilutil.h"
 
 #define OPERATOR_NUM_PARAMS 3
-
-/* SETUP_DATA_CALL_PARAMS reply params */
-#define MIN_DATA_CALL_REPLY_SIZE 36
-
-static const char *handle_tech(gint req, gchar *stech, gint *tech) {
-
-	/*
-	 * This code handles the mapping between the RIL_RadioTechnology
-	 * based upon whether this a reply to a voice registration request
-	 * ( see <Act> values - 27.007 Section 7.3 ), or a reply to a
-	 * data registration request ( see <curr_bearer> values - 27.007
-	 * Section 7.29 ).  The two sets of constants are similar, but
-	 * sublty different.
-	 */
-
-	g_assert(tech);
-
-	if (req == RIL_REQUEST_VOICE_REGISTRATION_STATE) {
-		if (stech) {
-			switch(atoi(stech)) {
-			case RADIO_TECH_UNKNOWN:
-				*tech = -1;
-				break;
-			case RADIO_TECH_GSM:
-			case RADIO_TECH_GPRS:
-				*tech = ACCESS_TECHNOLOGY_GSM;
-				break;
-			case RADIO_TECH_EDGE:
-				*tech = ACCESS_TECHNOLOGY_GSM_EGPRS;
-				break;
-			case RADIO_TECH_UMTS:
-				*tech = ACCESS_TECHNOLOGY_UTRAN;
-				break;
-			case RADIO_TECH_HSDPA:
-				*tech = ACCESS_TECHNOLOGY_UTRAN_HSDPA;
-				break;
-			case RADIO_TECH_HSUPA:
-				*tech = ACCESS_TECHNOLOGY_UTRAN_HSUPA;
-				break;
-			case RADIO_TECH_HSPAP:
-			case RADIO_TECH_HSPA:
-				/* HSPAP is HSPA+; which ofono doesn't define;
-				 * so, if differentiating HSPA and HSPA+ is
-				 * important, then ofono needs to be patched,
-				 * and we probably also need to introduce a
-				 * new indicator icon.
-				 */
-
-				*tech = ACCESS_TECHNOLOGY_UTRAN_HSDPA_HSUPA;
-				break;
-			case RADIO_TECH_LTE:
-				*tech = ACCESS_TECHNOLOGY_EUTRAN;
-				break;
-			default:
-				*tech = -1;
-			}
-		} else
-			*tech = -1;
-
-		return registration_tech_to_string(*tech);
-	} else {
-		if (stech) {
-			switch(atoi(stech)) {
-			case RADIO_TECH_GSM:
-			case RADIO_TECH_UNKNOWN:
-				*tech = PACKET_BEARER_NONE;
-				break;
-			case RADIO_TECH_GPRS:
-				*tech = PACKET_BEARER_GPRS;
-				break;
-			case RADIO_TECH_EDGE:
-				*tech = PACKET_BEARER_EGPRS;
-				break;
-			case RADIO_TECH_UMTS:
-				*tech = PACKET_BEARER_UMTS;
-				break;
-			case RADIO_TECH_HSDPA:
-				*tech = PACKET_BEARER_HSDPA;
-				break;
-			case RADIO_TECH_HSUPA:
-				*tech = PACKET_BEARER_HSUPA;
-				break;
-			case RADIO_TECH_HSPAP:
-			case RADIO_TECH_HSPA:
-				/* HSPAP is HSPA+; which ofono doesn't define;
-				 * so, if differentiating HSPA and HSPA+ is
-				 * important, then ofono needs to be patched,
-				 * and we probably also need to introduce a
-				 * new indicator icon.
-				 */
-				*tech = PACKET_BEARER_HSUPA_HSDPA;
-				break;
-			case RADIO_TECH_LTE:
-				*tech = PACKET_BEARER_EPS;
-				break;
-			default:
-				*tech = PACKET_BEARER_NONE;
-			}
-		} else
-			*tech = PACKET_BEARER_NONE;
-
-		return packet_bearer_to_string(*tech);
-	}
-}
 
 static void ril_reply_free_operator(gpointer data)
 {
@@ -175,6 +74,12 @@ struct reply_avail_ops *g_ril_reply_parse_avail_ops(GRil *gril,
 	struct reply_avail_ops *reply = NULL;
 	unsigned int num_ops, num_strings;
 	unsigned int i;
+	int strings_per_opt;
+
+	if (g_ril_vendor(gril) == OFONO_RIL_VENDOR_MTK)
+		strings_per_opt = 5;
+	else
+		strings_per_opt = 4;
 
 	/*
 	 * Minimum message length is 4:
@@ -191,17 +96,17 @@ struct reply_avail_ops *g_ril_reply_parse_avail_ops(GRil *gril,
 	g_ril_init_parcel(message, &rilp);
 	g_ril_append_print_buf(gril, "{");
 
-	/* Number of operators at the list (4 strings for every operator) */
+	/* Number of operators at the list */
 	num_strings = (unsigned int) parcel_r_int32(&rilp);
-	if (num_strings % 4) {
+	if (num_strings % strings_per_opt) {
 		ofono_error("%s: invalid QUERY_AVAIL_NETWORKS reply: "
-				"num_strings (%d) MOD 4 != 0",
+				"num_strings (%d) MOD %d != 0",
 				__func__,
-				num_strings);
+				num_strings, strings_per_opt);
 		goto error;
 	}
 
-	num_ops = num_strings / 4;
+	num_ops = num_strings / strings_per_opt;
 	DBG("noperators = %d", num_ops);
 
 	reply = g_try_new0(struct reply_avail_ops, 1);
@@ -223,6 +128,21 @@ struct reply_avail_ops *g_ril_reply_parse_avail_ops(GRil *gril,
 		operator->salpha = parcel_r_string(&rilp);
 		operator->numeric = parcel_r_string(&rilp);
 		operator->status = parcel_r_string(&rilp);
+
+		/*
+		 * MTK: additional string with technology: 2G/3G are the only
+		 * valid values currently.
+		 */
+		if (g_ril_vendor(gril) == OFONO_RIL_VENDOR_MTK) {
+			char *tech = parcel_r_string(&rilp);
+			if (strcmp(tech, "3G") == 0)
+				operator->tech = RADIO_TECH_UMTS;
+			else
+				operator->tech = RADIO_TECH_GSM;
+			g_free(tech);
+		} else {
+			operator->tech = RADIO_TECH_GSM;
+		}
 
 		if (operator->lalpha == NULL && operator->salpha == NULL) {
 			ofono_error("%s: operator (%s) doesn't specify names",
@@ -254,14 +174,14 @@ struct reply_avail_ops *g_ril_reply_parse_avail_ops(GRil *gril,
 
 		reply->list = g_slist_append(reply->list, operator);
 
-		g_ril_append_print_buf(gril,
-					"%s [lalpha=%s, salpha=%s, "
-					" numeric=%s status=%s]",
-					print_buf,
-					operator->lalpha,
-					operator->salpha,
-					operator->numeric,
-					operator->status);
+		g_ril_append_print_buf(gril, "%s [lalpha=%s, salpha=%s, "
+				" numeric=%s status=%s tech=%s]",
+				print_buf,
+				operator->lalpha,
+				operator->salpha,
+				operator->numeric,
+				operator->status,
+				ril_radio_tech_to_string(operator->tech));
 	}
 
 	g_ril_append_print_buf(gril, "%s}", print_buf);
@@ -347,189 +267,6 @@ error:
 	return NULL;
 }
 
-/* TODO: move this to grilutil.c */
-void g_ril_reply_free_setup_data_call(struct reply_setup_data_call *reply)
-{
-	if (reply) {
-		g_free(reply->ifname);
-		g_strfreev(reply->dns_addresses);
-		g_strfreev(reply->gateways);
-		g_strfreev(reply->ip_addrs);
-		g_free(reply);
-	}
-}
-
-struct reply_setup_data_call *g_ril_reply_parse_data_call(GRil *gril,
-						const struct ril_msg *message,
-						struct ofono_error *error)
-{
-	struct parcel rilp;
-	int num = 0;
-	int protocol;
-	char *type = NULL, *raw_ip_addrs = NULL;
-	char *dnses = NULL, *raw_gws = NULL;
-
-	struct reply_setup_data_call *reply =
-		g_new0(struct reply_setup_data_call, 1);
-
-	OFONO_NO_ERROR(error);
-
-	reply->cid = -1;
-
-       /* TODO:
-	 * Cleanup duplicate code between this function and
-	 * ril_util_parse_data_call_list().
-	 */
-
-	/* valid size: 36 (34 if HCRADIO defined) */
-	if (message->buf_len < MIN_DATA_CALL_REPLY_SIZE) {
-		/* TODO: make a macro for error logging */
-		ofono_error("%s: SETUP_DATA_CALL reply too small: %d",
-				__func__,
-				(int) message->buf_len);
-		OFONO_EINVAL(error);
-		goto error;
-	}
-
-	g_ril_init_parcel(message, &rilp);
-
-	/*
-	 * ril.h documents the reply to a RIL_REQUEST_SETUP_DATA_CALL
-	 * as being a RIL_Data_Call_Response_v6 struct, however in
-	 * reality, the response actually includes the version of the
-	 * struct, followed by an array of calls, so the array size
-	 * also has to be read after the version.
-	 *
-	 * TODO: What if there's more than 1 call in the list??
-	 */
-
-	/*
-	 * TODO: consider using 'unused' variable; however if we
-	 * do this, the alternative is a few more append_print_buf
-	 * calls ( which become no-ops if tracing isn't enabled.
-	 */
-	reply->version = parcel_r_int32(&rilp);
-	num = parcel_r_int32(&rilp);
-	if (num != 1) {
-		ofono_error("%s: too many calls: %d", __func__, num);
-		OFONO_EINVAL(error);
-		goto error;
-	}
-
-	reply->status = parcel_r_int32(&rilp);
-	reply->retry_time = parcel_r_int32(&rilp);
-	reply->cid = parcel_r_int32(&rilp);
-	reply->active = parcel_r_int32(&rilp);
-	type = parcel_r_string(&rilp);
-	reply->ifname = parcel_r_string(&rilp);
-	raw_ip_addrs = parcel_r_string(&rilp);
-	dnses = parcel_r_string(&rilp);
-	raw_gws = parcel_r_string(&rilp);
-
-	g_ril_append_print_buf(gril,
-				"{version=%d,num=%d [status=%d,retry=%d,"
-				"cid=%d,active=%d,type=%s,ifname=%s,address=%s"
-				",dns=%s,gateways=%s]}",
-				reply->version,
-				num,
-				reply->status,
-				reply->retry_time,
-				reply->cid,
-				reply->active,
-				type,
-				reply->ifname,
-				raw_ip_addrs,
-				dnses,
-				raw_gws);
-
-	g_ril_print_response(gril, message);
-
-	protocol = ril_protocol_string_to_ofono_protocol(type);
-	if (protocol < 0) {
-		ofono_error("%s: Invalid type(protocol) specified: %s",
-				__func__,
-				type);
-		OFONO_EINVAL(error);
-		goto error;
-	}
-
-	reply->protocol = (guint) protocol;
-
-	if (reply->ifname == NULL || strlen(reply->ifname) == 0) {
-		ofono_error("%s: No interface specified: %s",
-				__func__,
-				reply->ifname);
-
-		OFONO_EINVAL(error);
-		goto error;
-
-	}
-
-	/* TODO:
-	 * RILD can return multiple addresses; oFono only supports
-	 * setting a single IPv4 address.  At this time, we only
-	 * use the first address.  It's possible that a RIL may
-	 * just specify the end-points of the point-to-point
-	 * connection, in which case this code will need to
-	 * changed to handle such a device.
-	 *
-	 * For now split into a maximum of three, and only use
-	 * the first address for the remaining operations.
-	 */
-	if (raw_ip_addrs)
-		reply->ip_addrs = g_strsplit(raw_ip_addrs, " ", 3);
-	else
-		reply->ip_addrs = NULL;
-
-	/* TODO: I'm not sure it's possible to specify a zero-length
-	 * in a parcel in a parcel.  If *not*, then this can be
-	 * simplified.
-	 */
-	if (reply->ip_addrs == NULL || (sizeof(reply->ip_addrs) == 0)) {
-		ofono_error("%s no IP address: %s", __func__, raw_ip_addrs);
-
-		OFONO_EINVAL(error);
-		goto error;
-	}
-
-	/*
-	 * RILD can return multiple addresses; oFono only supports
-	 * setting a single IPv4 gateway.
-	 */
-	if (raw_gws)
-		reply->gateways = g_strsplit(raw_gws, " ", 3);
-	else
-		reply->gateways = NULL;
-
-	if (reply->gateways == NULL || (sizeof(reply->gateways) == 0)) {
-		ofono_error("%s: no gateways: %s", __func__, raw_gws);
-		OFONO_EINVAL(error);
-		goto error;
-	}
-
-	/* Split DNS addresses */
-	if (dnses)
-		reply->dns_addresses = g_strsplit(dnses, " ", 3);
-	else
-		reply->dns_addresses = NULL;
-
-	if (reply->dns_addresses == NULL ||
-		(sizeof(reply->dns_addresses) == 0)) {
-		ofono_error("%s: no DNS: %s", __func__, dnses);
-
-		OFONO_EINVAL(error);
-		goto error;
-	}
-
-error:
-	g_free(type);
-	g_free(raw_ip_addrs);
-	g_free(dnses);
-	g_free(raw_gws);
-
-	return reply;
-}
-
 struct reply_reg_state *g_ril_reply_parse_reg_state(GRil *gril,
 						const struct ril_msg *message)
 
@@ -538,8 +275,8 @@ struct reply_reg_state *g_ril_reply_parse_reg_state(GRil *gril,
 	int tmp;
 	char *sstatus = NULL, *slac = NULL, *sci = NULL;
 	char *stech = NULL, *sreason = NULL, *smax = NULL;
-	const char *tech_str;
 	struct reply_reg_state *reply;
+	char *endp;
 
 	DBG("");
 
@@ -622,14 +359,27 @@ struct reply_reg_state *g_ril_reply_parse_reg_state(GRil *gril,
 	else
 		reply->ci = -1;
 
-	tech_str = handle_tech(message->req, stech, &reply->tech);
+	if (stech && *stech != '\0') {
+		reply->tech = (int) strtol(stech, &endp, 10);
+		if (*endp != '\0') {
+			ofono_error("%s: cannot parse tech: %s in %s reply",
+					__func__, stech,
+					ril_request_id_to_string(message->req));
+			reply->tech = RADIO_TECH_UNKNOWN;
+		}
+	} else {
+		ofono_error("%s: no tech included in %s reply",
+				__func__,
+				ril_request_id_to_string(message->req));
+		reply->tech = RADIO_TECH_UNKNOWN;
+	}
 
 	g_ril_append_print_buf(gril,
 				"{%s,%s,%s,%s,%s,%s}",
 				registration_status_to_string(reply->status),
 				slac,
 				sci,
-				tech_str,
+				ril_radio_tech_to_string(reply->tech),
 				sreason,
 				smax);
 
@@ -1208,6 +958,254 @@ struct reply_clir *g_ril_reply_parse_get_clir(GRil *gril,
 
 error:
 	g_free(rclir);
+	return NULL;
+}
+
+struct ofono_call_forwarding_condition
+	*g_ril_reply_parse_query_call_fwd(GRil *gril,
+						const struct ril_msg *message,
+						unsigned int *list_size)
+{
+	struct ofono_call_forwarding_condition *list;
+	struct parcel rilp;
+	unsigned int i;
+
+	if (list_size == NULL) {
+		ofono_error("%s: list_size is NULL!", __func__);
+		goto error;
+	}
+
+	g_ril_init_parcel(message, &rilp);
+
+	if (rilp.size < sizeof(int32_t)) {
+		ofono_error("%s: malformed parcel, can't read num params",
+				__func__);
+		goto error;
+	}
+
+	*list_size = parcel_r_int32(&rilp);
+	if (*list_size == 0) {
+		/* not really an error; handled in caller */
+		goto error;
+	}
+
+	list = g_try_new0(struct ofono_call_forwarding_condition, *list_size);
+	if (list == NULL) {
+		ofono_error("%s: Out of memory", __func__);
+		goto error;
+	}
+
+	g_ril_append_print_buf(gril, "{");
+
+	for (i = 0; i < *list_size; i++) {
+		char *str;
+
+		list[i].status =  parcel_r_int32(&rilp);
+
+		parcel_r_int32(&rilp); /* skip reason */
+
+		list[i].cls = parcel_r_int32(&rilp);
+		list[i].phone_number.type = parcel_r_int32(&rilp);
+
+		str = parcel_r_string(&rilp);
+
+		if (str != NULL) {
+			strncpy(list[i].phone_number.number, str,
+				OFONO_MAX_PHONE_NUMBER_LENGTH);
+			g_free(str);
+
+			list[i].phone_number.number[
+				OFONO_MAX_PHONE_NUMBER_LENGTH] = '\0';
+		}
+
+		list[i].time = parcel_r_int32(&rilp);
+
+		if (rilp.malformed) {
+			ofono_error("%s: malformed parcel", __func__);
+			g_free(list);
+			goto error;
+		}
+
+		g_ril_append_print_buf(gril, "%s [%d,%d,%d,%s,%d]",
+					print_buf,
+					list[i].status,
+					list[i].cls,
+					list[i].phone_number.type,
+					list[i].phone_number.number,
+					list[i].time);
+
+	}
+
+	g_ril_append_print_buf(gril, "%s}", print_buf);
+	g_ril_print_response(gril, message);
+
+	return list;
+
+error:
+	return NULL;
+}
+
+int g_ril_reply_parse_get_preferred_network_type(GRil *gril,
+						const struct ril_msg *message)
+{
+	struct parcel rilp;
+	int numint, net_type;
+
+	g_ril_init_parcel(message, &rilp);
+
+	numint = parcel_r_int32(&rilp);
+	if (numint != 1) {
+		ofono_error("%s: Wrong format", __func__);
+		goto error;
+	}
+
+	net_type = parcel_r_int32(&rilp);
+	if (net_type < 0 || net_type > PREF_NET_TYPE_LTE_ONLY) {
+		ofono_error("%s: unknown network type", __func__);
+		goto error;
+	}
+
+	if (rilp.malformed) {
+		ofono_error("%s: malformed parcel", __func__);
+		goto error;
+	}
+
+	g_ril_append_print_buf(gril, "{%d}", net_type);
+	g_ril_print_response(gril, message);
+
+	return net_type;
+
+error:
+	return -1;
+}
+
+int g_ril_reply_parse_query_facility_lock(GRil *gril,
+						const struct ril_msg *message)
+{
+	struct parcel rilp;
+	int status, numint;
+
+	g_ril_init_parcel(message, &rilp);
+
+	numint = parcel_r_int32(&rilp);
+	if (numint != 1) {
+		ofono_error("%s: wrong format", __func__);
+		goto error;
+	}
+
+	status = parcel_r_int32(&rilp);
+
+	if (rilp.malformed) {
+		ofono_error("%s: malformed parcel", __func__);
+		goto error;
+	}
+
+	g_ril_append_print_buf(gril, "{%d}", status);
+	g_ril_print_response(gril, message);
+
+	return status;
+
+error:
+	return -1;
+}
+
+int g_ril_reply_parse_set_facility_lock(GRil *gril,
+					const struct ril_msg *message)
+{
+	struct parcel rilp;
+	int retries = -1, numint;
+
+	g_ril_init_parcel(message, &rilp);
+
+	/* mako reply has no payload for call barring */
+	if (parcel_data_avail(&rilp) == 0)
+		goto end;
+
+	numint = parcel_r_int32(&rilp);
+	if (numint != 1) {
+		ofono_error("%s: wrong format", __func__);
+		goto end;
+	}
+
+	retries = parcel_r_int32(&rilp);
+
+	if (rilp.malformed) {
+		ofono_error("%s: malformed parcel", __func__);
+		goto end;
+	}
+
+end:
+	g_ril_append_print_buf(gril, "{%d}", retries);
+	g_ril_print_response(gril, message);
+
+	return retries;
+}
+
+int *g_ril_reply_parse_retries(GRil *gril, const struct ril_msg *message,
+				enum ofono_sim_password_type passwd_type)
+{
+	struct parcel rilp;
+	int i, numint;
+	int *retries = g_try_malloc0(sizeof(int) * OFONO_SIM_PASSWORD_INVALID);
+
+	if (retries == NULL) {
+		ofono_error("%s: out of memory", __func__);
+		goto no_data;
+	}
+
+	for (i = 0; i < OFONO_SIM_PASSWORD_INVALID; ++i)
+		retries[i] = -1;
+
+	g_ril_init_parcel(message, &rilp);
+
+	/* maguro: no data is returned */
+	if (parcel_data_avail(&rilp) == 0)
+		goto no_data;
+
+	numint = parcel_r_int32(&rilp);
+
+	switch (g_ril_vendor(gril)) {
+	case OFONO_RIL_VENDOR_AOSP:
+		/*
+		 * The number of retries is valid only when a wrong password has
+		 * been introduced in Nexus 4. TODO: check Nexus 5 behaviour.
+		 */
+		if (message->error == RIL_E_PASSWORD_INCORRECT)
+			retries[passwd_type] = parcel_r_int32(&rilp);
+
+		g_ril_append_print_buf(gril, "{%d}", retries[passwd_type]);
+		break;
+	case OFONO_RIL_VENDOR_MTK:
+		if (numint != 4) {
+			ofono_error("%s: wrong format", __func__);
+			goto no_data;
+		}
+
+		retries[OFONO_SIM_PASSWORD_SIM_PIN] = parcel_r_int32(&rilp);
+		retries[OFONO_SIM_PASSWORD_SIM_PIN2] = parcel_r_int32(&rilp);
+		retries[OFONO_SIM_PASSWORD_SIM_PUK] = parcel_r_int32(&rilp);
+		retries[OFONO_SIM_PASSWORD_SIM_PUK2] = parcel_r_int32(&rilp);
+
+		g_ril_append_print_buf(gril,
+					"{pin %d, pin2 %d, puk %d, puk2 %d}",
+					retries[OFONO_SIM_PASSWORD_SIM_PIN],
+					retries[OFONO_SIM_PASSWORD_SIM_PIN2],
+					retries[OFONO_SIM_PASSWORD_SIM_PUK],
+					retries[OFONO_SIM_PASSWORD_SIM_PUK2]);
+		break;
+	}
+
+	if (rilp.malformed) {
+		ofono_error("%s: malformed parcel", __func__);
+		goto no_data;
+	}
+
+	g_ril_print_response(gril, message);
+
+	return retries;
+
+no_data:
+	g_free(retries);
 
 	return NULL;
 }

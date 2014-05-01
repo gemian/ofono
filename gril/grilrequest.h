@@ -3,7 +3,7 @@
  *  RIL library with GLib integration
  *
  *  Copyright (C) 2008-2011  Intel Corporation. All rights reserved.
- *  Copyright (C) 2012-2013  Canonical Ltd.
+ *  Copyright (C) 2012-2014  Canonical Ltd.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2 as
@@ -32,6 +32,14 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+struct req_call_fwd {
+	int action;
+	int type;
+	int cls;
+	const struct ofono_phone_number *number;
+	int time;
+};
 
 struct req_deactivate_data_call {
 	gint cid;
@@ -78,6 +86,35 @@ struct req_sim_read_record {
 	int length;
 };
 
+struct req_sim_write_binary {
+	guint app_type;
+	gchar *aid_str;
+	int fileid;
+	const unsigned char *path;
+	unsigned int path_len;
+	int start;
+	int length;
+	const unsigned char *data;
+};
+
+enum req_record_access_mode {
+	GRIL_REC_ACCESS_MODE_CURRENT,
+	GRIL_REC_ACCESS_MODE_ABSOLUTE,
+	GRIL_REC_ACCESS_MODE_NEXT,
+	GRIL_REC_ACCESS_MODE_PREVIOUS,
+};
+
+struct req_sim_write_record {
+	guint app_type;
+	gchar *aid_str;
+	int fileid;
+	const unsigned char *path;
+	unsigned int path_len;
+	enum req_record_access_mode mode;
+	int record;
+	int length;
+	const unsigned char *data;
+};
 
 struct req_pin_change_state {
 	const gchar *aid_str;
@@ -120,6 +157,14 @@ gboolean g_ril_request_sim_read_binary(GRil *gril,
 
 gboolean g_ril_request_sim_read_record(GRil *gril,
 					const struct req_sim_read_record *req,
+					struct parcel *rilp);
+
+gboolean g_ril_request_sim_write_binary(GRil *gril,
+					const struct req_sim_write_binary *req,
+					struct parcel *rilp);
+
+gboolean g_ril_request_sim_write_record(GRil *gril,
+					const struct req_sim_write_record *req,
 					struct parcel *rilp);
 
 void g_ril_request_read_imsi(GRil *gril,
@@ -196,6 +241,25 @@ void g_ril_request_query_call_waiting(GRil *gril,
 void g_ril_request_set_clir(GRil *gril,
 				int mode,
 				struct parcel *rilp);
+
+void g_ril_request_call_fwd(GRil *gril, const struct req_call_fwd *req,
+				struct parcel *rilp);
+
+void g_ril_request_set_preferred_network_type(GRil *gril, int net_type,
+						struct parcel *rilp);
+
+void g_ril_request_query_facility_lock(GRil *gril, const char *facility,
+					const char *password, int services,
+					struct parcel *rilp);
+
+void g_ril_request_set_facility_lock(GRil *gril, const char *facility,
+					int enable, const char *passwd,
+					int services, struct parcel *rilp);
+
+void g_ril_request_change_barring_password(GRil *gril, const char *facility,
+						const char *old_passwd,
+						const char *new_passwd,
+						struct parcel *rilp);
 
 #ifdef __cplusplus
 }

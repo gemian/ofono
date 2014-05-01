@@ -42,6 +42,22 @@
 #define RIL_E_MODE_NOT_SUPPORTED 13
 #define RIL_E_FDN_CHECK_FAILURE 14
 #define RIL_E_ILLEGAL_SIM_OR_ME 15
+/*
+ * Following error codes are actually Qualcomm-specific, but as they are used by
+ * our reference platform, we consider them valid for vendor
+ * OFONO_RIL_VENDOR_AOSP. The definition comes from cyanogenmod ril.h, which in
+ * turn copied it from codeaurora.
+ */
+#define RIL_E_DIAL_MODIFIED_TO_USSD 17
+#define RIL_E_DIAL_MODIFIED_TO_SS 18
+#define RIL_E_DIAL_MODIFIED_TO_DIAL 19
+#define RIL_E_USSD_MODIFIED_TO_DIAL 20
+#define RIL_E_USSD_MODIFIED_TO_SS 21
+#define RIL_E_USSD_MODIFIED_TO_USSD 22
+#define RIL_E_SS_MODIFIED_TO_DIAL 23
+#define RIL_E_SS_MODIFIED_TO_USSD 24
+#define RIL_E_SS_MODIFIED_TO_SS 25
+#define RIL_E_SUBSCRIPTION_NOT_SUPPORTED 26
 
 /* Preferred network types */
 #define PREF_NET_TYPE_GSM_WCDMA 0
@@ -56,11 +72,46 @@
 #define PREF_NET_TYPE_LTE_GSM_WCDMA 9
 #define PREF_NET_TYPE_LTE_CMDA_EVDO_GSM_WCDMA 10
 #define PREF_NET_TYPE_LTE_ONLY 11
+#define PREF_NET_TYPE_LTE_WCDMA 12
+
+/*
+ * Data Call Failure causes ( see TS 24.008 )
+ * section 6.1.3.1.3 or TS 24.301 Release 8+ Annex B.
+ */
+#define PDP_FAIL_NONE 0
+#define PDP_FAIL_OPERATOR_BARRED 0x08
+#define PDP_FAIL_INSUFFICIENT_RESOURCES 0x1A
+#define PDP_FAIL_MISSING_UKNOWN_APN 0x1B
+#define PDP_FAIL_UNKNOWN_PDP_ADDRESS_TYPE 0x1C
+#define PDP_FAIL_USER_AUTHENTICATION 0x1D
+#define PDP_FAIL_ACTIVATION_REJECT_GGSN 0x1E
+#define PDP_FAIL_ACTIVATION_REJECT_UNSPECIFIED 0x1F
+#define PDP_FAIL_SERVICE_OPTION_NOT_SUPPORTED 0x20
+#define PDP_FAIL_SERVICE_OPTION_NOT_SUBSCRIBED 0x21
+#define PDP_FAIL_SERVICE_OPTION_OUT_OF_ORDER 0x22
+#define PDP_FAIL_NSAPI_IN_USE 0x23
+#define PDP_FAIL_REGULAR_DEACTIVATION 0x24  /* restart radio */
+#define PDP_FAIL_ONLY_IPV4_ALLOWED 0x32
+#define PDP_FAIL_ONLY_IPV6_ALLOWED 0x33
+#define PDP_FAIL_ONLY_SINGLE_BEARER_ALLOWED 0x34
+#define PDP_FAIL_PROTOCOL_ERRORS 0x6F
+#define PDP_FAIL_VOICE_REGISTRATION_FAIL -1
+#define PDP_FAIL_DATA_REGISTRATION_FAIL -2
+#define PDP_FAIL_SIGNAL_LOST -3
+#define PDP_FAIL_PREF_RADIO_TECH_CHANGED -4
+#define PDP_FAIL_RADIO_POWER_OFF -5
+#define PDP_FAIL_TETHERED_CALL_ACTIVE -6
+#define PDP_FAIL_ERROR_UNSPECIFIED 0xffff
 
 /* Radio States */
 #define RADIO_STATE_OFF 0
 #define RADIO_STATE_UNAVAILABLE 1
 #define RADIO_STATE_ON 10
+
+/* Deprecated, but still used by some modems */
+#define RADIO_STATE_SIM_NOT_READY 2
+#define RADIO_STATE_SIM_LOCKED_OR_ABSENT 3
+#define RADIO_STATE_SIM_READY 4
 
 /* Radio technologies */
 #define RADIO_TECH_UNKNOWN 0
@@ -302,5 +353,8 @@
 #define RIL_UNSOL_EXIT_EMERGENCY_CALLBACK_MODE 1033
 #define RIL_UNSOL_RIL_CONNECTED 1034
 #define RIL_UNSOL_VOICE_RADIO_TECH_CHANGED 1035
+
+/* Suplementary services Service class*/
+#define SERVICE_CLASS_NONE 0
 
 #endif /*__RIL_CONSTANTS_H*/

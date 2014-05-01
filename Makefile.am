@@ -19,7 +19,7 @@ pkginclude_HEADERS = include/log.h include/plugin.h include/history.h \
 			include/cdma-connman.h include/gnss.h \
 			include/private-network.h include/cdma-netreg.h \
 			include/cdma-provision.h include/handsfree.h \
-			include/sim-mnclength.h
+			include/sim-mnclength.h include/spn-table.h
 
 nodist_pkginclude_HEADERS = include/version.h
 
@@ -118,11 +118,33 @@ endif
 if RILMODEM
 builtin_sources += $(gril_sources)
 
+builtin_modules += rildev
+builtin_sources += plugins/rildev.c
+
 builtin_modules += ril
 builtin_sources += plugins/ril.c
 
+builtin_modules += mtk
+builtin_sources += plugins/mtk.c
+
+builtin_modules += androidspntable
+builtin_sources += plugins/android-spn-table.c
+
+builtin_modules += mtkmodem
+builtin_sources += drivers/mtkmodem/mtkmodem.h \
+			drivers/mtkmodem/mtkmodem.c \
+			drivers/mtkmodem/mtkutil.h \
+			drivers/mtkmodem/mtkutil.c \
+			drivers/mtkmodem/mtkrequest.h \
+			drivers/mtkmodem/mtkrequest.c \
+			drivers/mtkmodem/mtkunsol.h \
+			drivers/mtkmodem/mtkunsol.c \
+			drivers/mtkmodem/voicecall.c \
+			drivers/mtkmodem/gprs.c
+
 builtin_modules += rilmodem
 builtin_sources += drivers/rilmodem/rilmodem.h \
+			drivers/rilmodem/vendor.h \
 			drivers/rilmodem/rilmodem.c \
 			drivers/rilmodem/devinfo.c \
 			drivers/rilmodem/network-registration.c \
@@ -135,7 +157,10 @@ builtin_sources += drivers/rilmodem/rilmodem.h \
 			drivers/rilmodem/rilutil.c \
 			drivers/rilmodem/rilutil.h \
 			drivers/rilmodem/ussd.c \
-			drivers/rilmodem/call-settings.c
+			drivers/rilmodem/call-settings.c \
+			drivers/rilmodem/call-forwarding.c \
+			drivers/rilmodem/radio-settings.c \
+			drivers/rilmodem/call-barring.c
 
 endif
 
@@ -480,9 +505,13 @@ endif
 
 if PROVISION
 builtin_sources += plugins/mbpi.h plugins/mbpi.c
+builtin_sources += plugins/android-apndb.h plugins/android-apndb.c
 
 builtin_modules += provision
 builtin_sources += plugins/provision.c
+
+builtin_modules += android_provision
+builtin_sources += plugins/android-provision.c
 
 builtin_modules += cdma_provision
 builtin_sources += plugins/cdma-provision.c
@@ -546,7 +575,7 @@ src_ofonod_SOURCES = $(gdbus_sources) $(builtin_sources) src/ofono.ver \
 			src/cdma-smsutil.h src/cdma-smsutil.c \
 			src/cdma-sms.c src/private-network.c src/cdma-netreg.c \
 			src/cdma-provision.c src/handsfree.c \
-			src/sim-mnclength.c
+			src/sim-mnclength.c src/spn-table.c
 
 src_ofonod_LDADD = $(builtin_libadd) @GLIB_LIBS@ @DBUS_LIBS@ -ldl
 
@@ -706,7 +735,10 @@ unit_tests = unit/test-common unit/test-util unit/test-idmap \
 				unit/test-grilrequest \
 				unit/test-grilreply \
 				unit/test-grilunsol \
-				unit/test-mnclength
+				unit/test-mnclength \
+				unit/test-mtkrequest \
+				unit/test-mtkreply \
+				unit/test-mtkunsol
 
 noinst_PROGRAMS = $(unit_tests) \
 			unit/test-sms-root unit/test-mux unit/test-caif
@@ -775,6 +807,26 @@ unit_test_grilunsol_SOURCES = unit/test-grilunsol.c $(gril_sources) \
 				src/common.c gatchat/ringbuffer.c
 unit_test_grilunsol_LDADD = @GLIB_LIBS@ -ldl
 unit_objects += $(unit_test_grilunsol_OBJECTS)
+
+unit_test_mtkrequest_SOURCES = unit/test-mtkrequest.c $(gril_sources) \
+				drivers/mtkmodem/mtkrequest.c \
+				src/log.c src/util.c src/simutil.c \
+				src/common.c gatchat/ringbuffer.c
+unit_test_mtkrequest_LDADD = @GLIB_LIBS@ -ldl
+unit_objects += $(unit_test_mtkrequest_OBJECTS)
+
+unit_test_mtkreply_SOURCES = unit/test-mtkreply.c $(gril_sources) \
+				src/log.c src/util.c src/simutil.c \
+				src/common.c gatchat/ringbuffer.c
+unit_test_mtkreply_LDADD = @GLIB_LIBS@ -ldl
+unit_objects += $(unit_test_mtkreply_OBJECTS)
+
+unit_test_mtkunsol_SOURCES = unit/test-mtkunsol.c $(gril_sources) \
+				drivers/mtkmodem/mtkunsol.c \
+				src/log.c src/util.c src/simutil.c \
+				src/common.c gatchat/ringbuffer.c
+unit_test_mtkunsol_LDADD = @GLIB_LIBS@ -ldl
+unit_objects += $(unit_test_mtkunsol_OBJECTS)
 
 unit_test_mnclength_SOURCES = unit/test-mnclength.c plugins/mnclength.c \
 				src/log.c src/sim-mnclength.c

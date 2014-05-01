@@ -3,7 +3,7 @@
  *  RIL library with GLib integration
  *
  *  Copyright (C) 2008-2011  Intel Corporation. All rights reserved.
- *  Copyright (C) 2012-2013  Canonical Ltd.
+ *  Copyright (C) 2012-2014  Canonical Ltd.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2 as
@@ -69,7 +69,8 @@
 #define CMD_SET_DATA      219 /* 0xDB   */
 
 /* FID/path of SIM/USIM root directory */
-#define ROOTMF "3F00"
+#define ROOTMF ((char[]) {'\x3F', '\x00'})
+#define ROOTMF_SZ sizeof(ROOTMF)
 
 /* RIL_Request* parameter counts */
 #define GET_IMSI_NUM_PARAMS 1
@@ -102,7 +103,8 @@ static gboolean set_path(GRil *ril, guint app_type,
 				const int fileid, const guchar *path,
 				const guint path_len)
 {
-	guchar db_path[6] = { 0x00 };
+	unsigned char db_path[6] = { 0x00 };
+	unsigned char *comm_path = db_path;
 	char *hex_path = NULL;
 	int len = 0;
 
@@ -118,8 +120,22 @@ static gboolean set_path(GRil *ril, guint app_type,
 		return FALSE;
 	}
 
+	/*
+	 * db_path contains the ID of the MF, but MediaTek modems return an
+	 * error if we do not remove it. Other devices work the other way
+	 * around: they need the MF in the path. In fact MTK behaviour seem to
+	 * be the right one: to have the MF in the file is forbidden following
+	 * ETSI TS 102 221, section 8.4.2 (we are accessing the card in mode
+	 * "select by path from MF", see 3gpp 27.007, +CRSM).
+	 */
+	if (g_ril_vendor(ril) == OFONO_RIL_VENDOR_MTK && len >= (int) ROOTMF_SZ
+			&& memcmp(db_path, ROOTMF, ROOTMF_SZ) == 0) {
+		comm_path = db_path + ROOTMF_SZ;
+		len -= ROOTMF_SZ;
+	}
+
 	if (len > 0) {
-		hex_path = encode_hex(db_path, len, 0);
+		hex_path = encode_hex(comm_path, len, 0);
 		parcel_w_string(rilp, hex_path);
 
 		g_ril_append_print_buf(ril,
@@ -128,23 +144,6 @@ static gboolean set_path(GRil *ril, guint app_type,
 					hex_path);
 
 		g_free(hex_path);
-	} else if (fileid == SIM_EF_ICCID_FILEID || fileid == SIM_EFPL_FILEID) {
-		/*
-		 * Special catch-all for EF_ICCID (unique card ID)
-		 * and EF_PL files which exist in the root directory.
-		 * As the sim_info_cb function may not have yet
-		 * recorded the app_type for the SIM, and the path
-		 * for both files is the same for 2g|3g, just hard-code.
-		 *
-		 * See 'struct ef_db' in:
-		 * ../../src/simutil.c for more details.
-		 */
-		parcel_w_string(rilp, ROOTMF);
-
-		g_ril_append_print_buf(ril,
-					"%spath=%s,",
-					print_buf,
-					ROOTMF);
 	} else {
 		/*
 		 * The only known case of this is EFPHASE_FILED (0x6FAE).
@@ -152,8 +151,13 @@ static gboolean set_path(GRil *ril, guint app_type,
 		 * EFPHASE contains a value of 0x0000 for it's
 		 * 'parent3g' member.  This causes a NULL path to
 		 * be returned.
+		 * (EF_PHASE does not exist for USIM)
 		 */
 		parcel_w_string(rilp, NULL);
+
+		g_ril_append_print_buf(ril,
+					"%spath=(null),",
+					print_buf);
 	}
 
 	return TRUE;
@@ -184,6 +188,8 @@ gboolean g_ril_request_deactivate_data_call(GRil *gril,
 	 */
 	reason_str = g_strdup_printf("%d", req->reason);
 	parcel_w_string(rilp, reason_str);
+
+	g_ril_append_print_buf(gril, "(%s,%s)", cid_str, reason_str);
 
 	g_free(cid_str);
 	g_free(reason_str);
@@ -231,10 +237,19 @@ gboolean g_ril_request_setup_data_call(GRil *gril,
 	gchar *auth_str;
 	gchar *profile_str;
 	size_t apn_len;
+	int num_param = SETUP_DATA_CALL_PARAMS;
+	const char *request_cid_pr = "";
 
 	DBG("");
 
-	if (req->tech < RADIO_TECH_GPRS || req->tech > RADIO_TECH_GSM) {
+	if (g_ril_vendor(gril) == OFONO_RIL_VENDOR_MTK)
+		num_param = SETUP_DATA_CALL_PARAMS + 1;
+
+	/*
+	 * Radio technology to use: 0-CDMA, 1-GSM/UMTS, 2...
+	 * values > 2 are (RADIO_TECH + 2)
+	 */
+	if (req->tech < 1 || req->tech > (RADIO_TECH_GSM + 2)) {
 		ofono_error("%s: Invalid tech value: %d",
 				__func__,
 				req->tech);
@@ -297,7 +312,7 @@ gboolean g_ril_request_setup_data_call(GRil *gril,
 
 	parcel_init(rilp);
 
-	parcel_w_int32(rilp, SETUP_DATA_CALL_PARAMS);
+	parcel_w_int32(rilp, num_param);
 
 	tech_str = g_strdup_printf("%d", req->tech);
 	parcel_w_string(rilp, tech_str);
@@ -310,15 +325,22 @@ gboolean g_ril_request_setup_data_call(GRil *gril,
 	parcel_w_string(rilp, auth_str);
 	parcel_w_string(rilp, protocol_str);
 
+	if (g_ril_vendor(gril) == OFONO_RIL_VENDOR_MTK) {
+		/* MTK request_cid parameter */
+		parcel_w_string(rilp, "1");
+		request_cid_pr = ",1";
+	}
+
 	g_ril_append_print_buf(gril,
-				"(%s,%s,%s,%s,%s,%s,%s)",
+				"(%s,%s,%s,%s,%s,%s,%s%s)",
 				tech_str,
 				profile_str,
 				req->apn,
 				req->username,
 				req->password,
 				auth_str,
-				protocol_str);
+				protocol_str,
+				request_cid_pr);
 
 	g_free(tech_str);
 	g_free(auth_str);
@@ -411,7 +433,7 @@ gboolean g_ril_request_sim_read_record(GRil *gril,
 
 	g_ril_append_print_buf(gril,
 				"(cmd=0x%.2X,efid=0x%.4X,",
-				CMD_GET_RESPONSE,
+				CMD_READ_RECORD,
 				req->fileid);
 
 	if (set_path(gril, req->app_type, rilp, req->fileid,
@@ -424,6 +446,113 @@ gboolean g_ril_request_sim_read_record(GRil *gril,
 	parcel_w_string(rilp, NULL);       /* data; only req'd for writes */
 	parcel_w_string(rilp, NULL);       /* pin2; only req'd for writes */
 	parcel_w_string(rilp, req->aid_str); /* AID (Application ID) */
+
+	return TRUE;
+
+error:
+	return FALSE;
+}
+
+gboolean g_ril_request_sim_write_binary(GRil *gril,
+					const struct req_sim_write_binary *req,
+					struct parcel *rilp)
+{
+	char *hex_data;
+	int p1, p2;
+
+	parcel_init(rilp);
+	parcel_w_int32(rilp, CMD_UPDATE_BINARY);
+	parcel_w_int32(rilp, req->fileid);
+
+	g_ril_append_print_buf(gril, "(cmd=0x%02X,efid=0x%04X,",
+				CMD_UPDATE_BINARY, req->fileid);
+
+	if (set_path(gril, req->app_type, rilp, req->fileid,
+			req->path, req->path_len) == FALSE)
+		goto error;
+
+	p1 = req->start >> 8;
+	p2 = req->start & 0xff;
+	hex_data = encode_hex(req->data, req->length, 0);
+
+	parcel_w_int32(rilp, p1);		/* P1 */
+	parcel_w_int32(rilp, p2);		/* P2 */
+	parcel_w_int32(rilp, req->length);	/* P3 (Lc) */
+	parcel_w_string(rilp, hex_data);	/* data */
+	parcel_w_string(rilp, NULL);		/* pin2; only for FDN/BDN */
+	parcel_w_string(rilp, req->aid_str);	/* AID (Application ID) */
+
+	g_ril_append_print_buf(gril,
+				"%s%d,%d,%d,%s,pin2=(null),aid=%s)",
+				print_buf,
+				p1,
+				p2,
+				req->length,
+				hex_data,
+				req->aid_str);
+
+	g_free(hex_data);
+
+	return TRUE;
+
+error:
+	return FALSE;
+}
+
+static int get_sim_record_access_p2(enum req_record_access_mode mode)
+{
+	switch (mode) {
+	case GRIL_REC_ACCESS_MODE_CURRENT:
+		return 4;
+	case GRIL_REC_ACCESS_MODE_ABSOLUTE:
+		return 4;
+	case GRIL_REC_ACCESS_MODE_NEXT:
+		return 2;
+	case GRIL_REC_ACCESS_MODE_PREVIOUS:
+		return 3;
+	}
+
+	return -1;
+}
+
+gboolean g_ril_request_sim_write_record(GRil *gril,
+					const struct req_sim_write_record *req,
+					struct parcel *rilp)
+{
+	char *hex_data;
+	int p2;
+
+	parcel_init(rilp);
+	parcel_w_int32(rilp, CMD_UPDATE_RECORD);
+	parcel_w_int32(rilp, req->fileid);
+
+	g_ril_append_print_buf(gril, "(cmd=0x%02X,efid=0x%04X,",
+				CMD_UPDATE_RECORD, req->fileid);
+
+	if (set_path(gril, req->app_type, rilp, req->fileid,
+			req->path, req->path_len) == FALSE)
+		goto error;
+
+	p2 = get_sim_record_access_p2(req->mode);
+	hex_data = encode_hex(req->data, req->length, 0);
+
+	parcel_w_int32(rilp, req->record);	/* P1 */
+	parcel_w_int32(rilp, p2);		/* P2 (access mode) */
+	parcel_w_int32(rilp, req->length);	/* P3 (Lc) */
+	parcel_w_string(rilp, hex_data);	/* data */
+	parcel_w_string(rilp, NULL);		/* pin2; only for FDN/BDN */
+	parcel_w_string(rilp, req->aid_str);	/* AID (Application ID) */
+
+	g_ril_append_print_buf(gril,
+				"%s%d,%d,%d,%s,pin2=(null),aid=%s)",
+				print_buf,
+				req->record,
+				p2,
+				req->length,
+				hex_data,
+				req->aid_str);
+
+	g_free(hex_data);
 
 	return TRUE;
 
@@ -779,4 +908,114 @@ void g_ril_request_set_clir(GRil *gril,
 	parcel_w_int32(rilp, mode);
 
 	g_ril_append_print_buf(gril, "(%d)", mode);
+}
+
+void g_ril_request_call_fwd(GRil *gril,	const struct req_call_fwd *req,
+				struct parcel *rilp)
+{
+	parcel_init(rilp);
+
+	parcel_w_int32(rilp, req->action);
+	parcel_w_int32(rilp, req->type);
+	parcel_w_int32(rilp, req->cls);
+
+	g_ril_append_print_buf(gril, "(type: %d cls: %d ", req->type, req->cls);
+
+	if (req->number != NULL) {
+		parcel_w_int32(rilp, req->number->type);
+		parcel_w_string(rilp, (char *) req->number->number);
+
+		g_ril_append_print_buf(gril, "%s number type: %d number: "
+					"%s time: %d) ", print_buf,
+					req->number->type, req->number->number,
+					req->time);
+	} else {
+		/*
+		 * The following values have no real meaning for
+		 * activation/deactivation/erasure actions, but
+		 * apparently rild expects them, so fields need to
+		 * be filled. Otherwise there is no response.
+		 */
+
+		parcel_w_int32(rilp, 0x81);		/* TOA unknown */
+		parcel_w_string(rilp, "1234567890");
+		g_ril_append_print_buf(gril, "%s number type: %d number: "
+					"%s time: %d) ", print_buf,
+					0x81, "1234567890",
+					req->time);
+
+	}
+
+	parcel_w_int32(rilp, req->time);
+}
+
+void g_ril_request_set_preferred_network_type(GRil *gril, int net_type,
+						struct parcel *rilp)
+{
+	parcel_init(rilp);
+
+	parcel_w_int32(rilp, 1);	/* Number of params */
+	parcel_w_int32(rilp, net_type);
+
+	g_ril_append_print_buf(gril, "(%d)", net_type);
+}
+
+void g_ril_request_query_facility_lock(GRil *gril, const char *facility,
+					const char *password, int services,
+					struct parcel *rilp)
+{
+	char svcs_str[4];
+
+	parcel_init(rilp);
+
+	parcel_w_int32(rilp, 4);	/* # of strings */
+	parcel_w_string(rilp, facility);
+	parcel_w_string(rilp, password);
+	snprintf(svcs_str, sizeof(svcs_str), "%d", services);
+	parcel_w_string(rilp, svcs_str);
+	parcel_w_string(rilp, NULL);	/* AID (for FDN, not yet supported) */
+
+	g_ril_append_print_buf(gril, "(%s,%s,%s,(null))",
+				facility, password, svcs_str);
+}
+
+void g_ril_request_set_facility_lock(GRil *gril, const char *facility,
+					int enable, const char *passwd,
+					int services, struct parcel *rilp)
+{
+	char svcs_str[4];
+	const char *enable_str;
+
+	parcel_init(rilp);
+
+	parcel_w_int32(rilp, 5);	/* # of strings */
+	parcel_w_string(rilp, facility);
+	if (enable)
+		enable_str = "1";
+	else
+		enable_str = "0";
+	parcel_w_string(rilp, enable_str);
+	parcel_w_string(rilp, passwd);
+	snprintf(svcs_str, sizeof(svcs_str), "%d", services);
+	parcel_w_string(rilp, svcs_str);
+	parcel_w_string(rilp, NULL);	/* AID (for FDN, not yet supported) */
+
+	g_ril_append_print_buf(gril, "(%s,%s,%s,%s,(null))",
+				facility, enable_str, passwd, svcs_str);
+}
+
+void g_ril_request_change_barring_password(GRil *gril, const char *facility,
+						const char *old_passwd,
+						const char *new_passwd,
+						struct parcel *rilp)
+{
+	parcel_init(rilp);
+
+	parcel_w_int32(rilp, 3);	/* # of strings */
+	parcel_w_string(rilp, facility);
+	parcel_w_string(rilp, old_passwd);
+	parcel_w_string(rilp, new_passwd);
+
+	g_ril_append_print_buf(gril, "(%s,%s,%s)",
+				facility, old_passwd, new_passwd);
 }

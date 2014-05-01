@@ -35,6 +35,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <netinet/in.h>
+#include <unistd.h>
 
 #include <glib.h>
 
@@ -50,6 +51,9 @@
 
 #define COMMAND_FLAG_EXPECT_PDU			0x1
 #define COMMAND_FLAG_EXPECT_SHORT_PROMPT	0x2
+
+#define	RADIO_GID 1001
+#define	RADIO_UID 1001
 
 struct ril_request {
 	gchar *data;
@@ -99,6 +103,9 @@ struct ril_s {
 	gboolean destroyed;			/* Re-entrancy guard */
 	gboolean in_read_handler;		/* Re-entrancy guard */
 	gboolean in_notify;
+	enum ofono_ril_vendor vendor;
+	GRilMsgIdToStrFunc req_to_string;
+	GRilMsgIdToStrFunc unsol_to_string;
 };
 
 struct _GRil {
@@ -118,6 +125,32 @@ struct req_hdr {
 char print_buf[RIL_PRINT_BUF_SIZE] __attribute__((used));
 
 static void ril_wakeup_writer(struct ril_s *ril);
+
+static const char *request_id_to_string(struct ril_s *ril, int req)
+{
+	const char *str = NULL;
+
+	if (ril->req_to_string)
+		str = ril->req_to_string(req);
+
+	if (str == NULL)
+		str = ril_request_id_to_string(req);
+
+	return str;
+}
+
+static const char *unsol_request_to_string(struct ril_s *ril, int req)
+{
+	const char *str = NULL;
+
+	if (ril->unsol_to_string)
+		str = ril->unsol_to_string(req);
+
+	if (str == NULL)
+		str = ril_unsol_request_to_string(req);
+
+	return str;	
+}
 
 static void ril_notify_node_destroy(gpointer data, gpointer user_data)
 {
@@ -239,7 +272,7 @@ static struct ril_request *ril_request_create(struct ril_s *ril,
 	}
 
 	DBG("req: %s, id: %d, data_len: %u",
-		ril_request_id_to_string(req), id, data_len);
+		request_id_to_string(ril, req), id, data_len);
 
 	/* Full request size: header size plus buffer length */
 	r->data_len = data_len + sizeof(header);
@@ -346,7 +379,7 @@ static void handle_response(struct ril_s *p, struct ril_msg *message)
 			if (message->error != RIL_E_SUCCESS)
 				RIL_TRACE(p, "[%04d]< %s failed %s",
 					message->serial_no,
-					ril_request_id_to_string(message->req),
+					request_id_to_string(p, message->req),
 					ril_error_to_string(message->error));
 
 			req = g_queue_pop_nth(p->command_queue, i);
@@ -375,7 +408,7 @@ static void handle_response(struct ril_s *p, struct ril_msg *message)
 
 	if (found == FALSE)
 		DBG("Reply: %s serial_no: %d without a matching request!",
-			ril_request_id_to_string(message->req),
+			request_id_to_string(p, message->req),
 			message->serial_no);
 
 }
@@ -418,7 +451,7 @@ static void handle_unsol_req(struct ril_s *p, struct ril_msg *message)
 	/* Only log events not being listended for... */
 	if (!found)
 		DBG("RIL Event: %s\n",
-			ril_unsol_request_to_string(message->req));
+			unsol_request_to_string(p, message->req));
 
 	p->in_notify = FALSE;
 }
@@ -765,6 +798,17 @@ static gboolean node_compare_by_group(struct ril_notify_node *node,
 	return FALSE;
 }
 
+static void set_process_id(gid_t gid, uid_t uid)
+{
+	if (setegid(gid) < 0)
+		ofono_error("%s: setegid(%d) failed: %s (%d)",
+				__func__, gid, strerror(errno), errno);
+
+	if (seteuid(uid) < 0)
+		ofono_error("%s: seteuid(%d) failed: %s (%d)",
+				__func__, uid, strerror(errno), errno);
+}
+
 static struct ril_s *create_ril(const char *sock_path)
 
 {
@@ -785,6 +829,10 @@ static struct ril_s *create_ril(const char *sock_path)
 	ril->req_bytes_written = 0;
 	ril->trace = FALSE;
 
+	/* sock_path is allowed to be NULL for unit tests */
+	if (sock_path == NULL)
+		return ril;
+
 	sk = socket(AF_UNIX, SOCK_STREAM, 0);
 	if (sk < 0) {
 		ofono_error("create_ril: can't create unix socket: %s (%d)\n",
@@ -796,11 +844,17 @@ static struct ril_s *create_ril(const char *sock_path)
 	addr.sun_family = AF_UNIX;
 	strncpy(addr.sun_path, sock_path, sizeof(addr.sun_path) - 1);
 
+	/* RIL expects user radio to connect to the socket */
+	set_process_id(RADIO_GID, RADIO_UID);
+
 	if (connect(sk, (struct sockaddr *) &addr, sizeof(addr)) < 0) {
 		ofono_error("create_ril: can't connect to RILD: %s (%d)\n",
 				strerror(errno), errno);
 		goto error;
 	}
+
+	/* Switch back to root */
+	set_process_id(0, 0);
 
 	io = g_io_channel_unix_new(sk);
 	if (io == NULL) {
@@ -994,7 +1048,7 @@ void g_ril_init_parcel(const struct ril_msg *message, struct parcel *rilp)
 	rilp->malformed = 0;
 }
 
-GRil *g_ril_new(const char *sock_path)
+GRil *g_ril_new(const char *sock_path, enum ofono_ril_vendor vendor)
 {
 	GRil *ril;
 
@@ -1010,6 +1064,8 @@ GRil *g_ril_new(const char *sock_path)
 
 	ril->group = ril->parent->next_gid++;
 	ril->ref_count = 1;
+
+	ril->parent->vendor = vendor;
 
 	return ril;
 }
@@ -1146,6 +1202,19 @@ gboolean g_ril_set_debugf(GRil *ril,
 	return ril_set_debug(ril->parent, func, user_data);
 }
 
+gboolean g_ril_set_vendor_print_msg_id_funcs(GRil *ril,
+					GRilMsgIdToStrFunc req_to_string,
+					GRilMsgIdToStrFunc unsol_to_string)
+{
+	if (ril == NULL || ril->parent == NULL)
+		return FALSE;
+
+	ril->parent->req_to_string = req_to_string;
+	ril->parent->unsol_to_string = unsol_to_string;
+
+	return TRUE;
+}
+
 guint g_ril_register(GRil *ril, const int req,
 			GRilNotifyFunc func, gpointer user_data)
 {
@@ -1174,4 +1243,22 @@ gboolean g_ril_unregister_all(GRil *ril)
 					ril->parent->in_notify,
 					node_compare_by_group,
 					GUINT_TO_POINTER(ril->group));
+}
+
+enum ofono_ril_vendor g_ril_vendor(GRil *ril)
+{
+	if (ril == NULL)
+		return OFONO_RIL_VENDOR_AOSP;
+
+	return ril->parent->vendor;
+}
+
+const char *g_ril_request_id_to_string(GRil *ril, int req)
+{
+	return request_id_to_string(ril->parent, req);
+}
+
+const char *g_ril_unsol_request_to_string(GRil *ril, int req)
+{
+	return unsol_request_to_string(ril->parent, req);
 }

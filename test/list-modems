@@ -8,7 +8,7 @@ try:
 	manager = dbus.Interface(bus.get_object('org.ofono', '/'),
 						'org.ofono.Manager')
 except dbus.exceptions.DBusException as e:
-       print("Service org.ofono not found on DBus: {}".format(e))	
+       print("Service org.ofono not found on DBus: {}".format(e))
        exit(1)
 
 modems = manager.GetModems()

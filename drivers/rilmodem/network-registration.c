@@ -36,6 +36,7 @@
 #include <ofono/log.h>
 #include <ofono/modem.h>
 #include <ofono/netreg.h>
+#include <ofono/spn-table.h>
 
 #include "common.h"
 #include "gril.h"
@@ -62,6 +63,45 @@ struct netreg_data {
 static void ril_registration_status(struct ofono_netreg *netreg,
 					ofono_netreg_status_cb_t cb,
 					void *data);
+
+static int ril_tech_to_access_tech(int ril_tech)
+{
+	/*
+	 * This code handles the mapping between the RIL_RadioTechnology
+	 * and ofono's access technology values ( see <Act> values - 27.007
+	 * Section 7.3 ).
+	 */
+
+	switch(ril_tech) {
+	case RADIO_TECH_UNKNOWN:
+		return -1;
+	case RADIO_TECH_GSM:
+	case RADIO_TECH_GPRS:
+		return ACCESS_TECHNOLOGY_GSM;
+	case RADIO_TECH_EDGE:
+		return ACCESS_TECHNOLOGY_GSM_EGPRS;
+	case RADIO_TECH_UMTS:
+		return ACCESS_TECHNOLOGY_UTRAN;
+	case RADIO_TECH_HSDPA:
+		return ACCESS_TECHNOLOGY_UTRAN_HSDPA;
+	case RADIO_TECH_HSUPA:
+		return ACCESS_TECHNOLOGY_UTRAN_HSUPA;
+	case RADIO_TECH_HSPAP:
+	case RADIO_TECH_HSPA:
+		/* HSPAP is HSPA+; which ofono doesn't define;
+		 * so, if differentiating HSPA and HSPA+ is
+		 * important, then ofono needs to be patched,
+		 * and we probably also need to introduce a
+		 * new indicator icon.
+		 */
+
+		return ACCESS_TECHNOLOGY_UTRAN_HSDPA_HSUPA;
+	case RADIO_TECH_LTE:
+		return ACCESS_TECHNOLOGY_EUTRAN;
+	default:
+		return -1;
+	}
+}
 
 static void extract_mcc_mnc(const char *str, char *mcc, char *mnc)
 {
@@ -98,7 +138,7 @@ static void ril_creg_cb(struct ril_msg *message, gpointer user_data)
 				reply->status,
 				reply->lac,
 				reply->ci,
-				reply->tech,
+				ril_tech_to_access_tech(reply->tech),
 				cbd->data);
 
 	g_free(reply);
@@ -154,6 +194,31 @@ static void ril_registration_status(struct ofono_netreg *netreg,
 	}
 }
 
+static void set_oper_name(const struct reply_operator *reply,
+				struct ofono_network_operator *op)
+{
+	const char *spn = NULL;
+
+	/* Use SPN list if we do not have name */
+	if (strcmp(reply->numeric, reply->lalpha) == 0) {
+		spn = __ofono_spn_table_get_spn(reply->numeric);
+		if (spn != NULL) {
+			DBG("using spn override %s", spn);
+			strncpy(op->name, spn, OFONO_MAX_OPERATOR_NAME_LENGTH);
+		}
+	}
+
+	if (spn == NULL) {
+		/* Try to use long by default */
+		if (reply->lalpha)
+			strncpy(op->name, reply->lalpha,
+				OFONO_MAX_OPERATOR_NAME_LENGTH);
+		else if (reply->salpha)
+			strncpy(op->name, reply->salpha,
+				OFONO_MAX_OPERATOR_NAME_LENGTH);
+	}
+}
+
 static void ril_cops_cb(struct ril_msg *message, gpointer user_data)
 {
 	struct cb_data *cbd = user_data;
@@ -171,17 +236,13 @@ static void ril_cops_cb(struct ril_msg *message, gpointer user_data)
 	if ((reply = g_ril_reply_parse_operator(nd->ril, message)) == NULL)
 		goto error;
 
-	/* Try to use long by default */
-	if (reply->lalpha)
-		strncpy(op.name, reply->lalpha, OFONO_MAX_OPERATOR_NAME_LENGTH);
-	else if (reply->salpha)
-		strncpy(op.name, reply->salpha, OFONO_MAX_OPERATOR_NAME_LENGTH);
+	set_oper_name(reply, &op);
 
 	extract_mcc_mnc(reply->numeric, op.mcc, op.mnc);
 
 	/* Set to current */
 	op.status = OPERATOR_STATUS_CURRENT;
-	op.tech = nd->tech;
+	op.tech = ril_tech_to_access_tech(nd->tech);
 
 	CALLBACK_WITH_SUCCESS(cb, &op, cbd->data);
 
@@ -237,19 +298,11 @@ static void ril_cops_list_cb(struct ril_msg *message, gpointer user_data)
 	for (l = reply->list; l; l = l->next) {
 		operator = l->data;
 
-		/* Try to use long by default */
-		if (operator->lalpha)
-			strncpy(ops[i].name, operator->lalpha,
-					OFONO_MAX_OPERATOR_NAME_LENGTH);
-		else
-			strncpy(ops[i].name, operator->salpha,
-					OFONO_MAX_OPERATOR_NAME_LENGTH);
+		set_oper_name(operator, &ops[i]);
 
 		extract_mcc_mnc(operator->numeric, ops[i].mcc, ops[i].mnc);
 
-		/* FIXME: need to fix this for CDMA */
-		/* Use GSM as default, as RIL doesn't pass that info to us */
-		ops[i].tech = ACCESS_TECHNOLOGY_GSM;
+		ops[i].tech = ril_tech_to_access_tech(operator->tech);
 
 		/* Set the proper status  */
 		if (!strcmp(operator->status, "unknown"))
@@ -456,7 +509,7 @@ static int ril_netreg_probe(struct ofono_netreg *netreg, unsigned int vendor,
 
 	nd->ril = g_ril_clone(ril);
 	nd->vendor = vendor;
-	nd->tech = -1;
+	nd->tech = RADIO_TECH_UNKNOWN;
 	nd->time.sec = -1;
 	nd->time.min = -1;
 	nd->time.hour = -1;
