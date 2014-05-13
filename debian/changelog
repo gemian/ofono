@@ -1,63 +1,97 @@
+ofono (1.12.bzr6868+14.10.20140513-0ubuntu1) UNRELEASED; urgency=medium
+
+  [ Tony Espy ]
+  * plugins/android-provision.c: fix crash
+    Fix a crash in provision_get_settings() caused by the code
+    freeing 'error' with g_error_free() but not setting the value
+    to NULL afterwards. This can cause a subsequent call to
+    g_error_free() to happen again with an invalid pointer value.
+
+  [ Alfonso Sanchez-Beato ]
+  * drivers/mtkmodem/voicecall.c, plugins/mtk: MTK update
+    Add additional new atoms to the mtk plugin.  Also fixed a
+    double voicecall register issue.
+  * gril/grilreply.c, unit/test-grilreply.c: fix infineon reply parsing
+  * rilmodem/ussd.c, src/smsutil, src/ussd: USSD UCS2 support (LP: #1314143)
+
+ -- Tony Espy <espy@canonical.com>  Mon, 12 May 2014 17:47:41 -0400
+
 ofono (1.12.bzr6858+14.10.20140501-0ubuntu1) utopic; urgency=low
 
   [ Tony Espy ]
-  * [ Tony Espy ] build, gril, rilmodem, plugins/ril, test: call-
-    forwarding support. [ Alfonso Sanchez-Beato ] build, gril,
-    plugins/rildev: dynamic plugin loading for ril-type modems.   The
-    new rildev plugin reads an environment variable to determine
-    which   device plugin   to load ( defaults to the standard ril
-    plugin ). build, gril, plugins/ril, rilmodem, unit: radio-settings
-    support.   Allow radio technology ( ie. use 2G-only ) preference to
-    be configured. [ Tony Espy ] test: update remaining test scripts to
-    Python 3. build, src, plugins, src/gprs: add MMS support.   Added
-    new android-provision plugin and associated -apndb code   to
+  * build, gril, rilmodem, plugins/ril, test: call-forwarding support.
+
+  [ Alfonso Sanchez-Beato ]
+  * build, gril, plugins/rildev: dynamic plugin loading for ril-type modems.
+    The new rildev plugin reads an environment variable to determine
+    which device plugin to load ( defaults to the standard ril plugin ).
+  * build, gril, plugins/ril, rilmodem, unit: radio-settings support.
+    Allow radio technology ( ie. use 2G-only ) preference to be configured.
+
+  [ Tony Espy ]
+  * test: update remaining test scripts to Python 3.
+  * build, src, plugins, src/gprs: add MMS support.
+    Added new android-provision plugin and associated -apndb code to
     provision GPRS and MMS contexts using apns-conf.xml as the primary
-      provisioning database, while mobile-broadband-provider-info is
-    still   queried in order to pickup additional Apns. Also added
-    support for   combined Internet/MMS contexts by allowing MMS
-    specific properties   to be set for OFONO_GPRS_CONTEXT_TYPE_INTERNET
-    contexts. [ Alfonso Sanchez-Beato ] rilmodem/ussd: Fix USSD Initiate
-    hang (LP: #1299227 ). gril, rilmodem, unit: add SIM write support.
-      This allows ofono's core call-forwarding and message-waiting logic
-      to update persistent state on the SIM, in order to preserve it
-    across   reboots. build, gril, include, plugins, src,
-    drivers/mtkmodem, drivers/rilmodem: add MTK support.   This change
-    adds support for MTK-ril modems without breaking compatibility
-      with AOSP-ril modems. examples, include, plugins, src: support for
-    gid type MVNOs in Android APN database. gril, rilmodem: fix for call
-    redirections (LP: #1239869).   This fix checks and ignores a
-    Qualcomm specific error   code that indicates a call has been re-
-    directed by an   operator while roaming. build, gril, rilmodem,
-    unit: add call-barring support. gril, mtkmodem, rilmodem, unit: MTK
-    followup changes.   This change adds unit tests for MTK specific
-    messages.   It also consolidates parsing logic for parsing data
-      call lists, which is a valid payload for multiple message   types.
-    Finally, the deactivate data call logic on start-   up has been re-
-    worked to query the active calls before   attempting to deactivate
-    any. src/smsutil: use UTF-16 instead of UCS-2 (LP: #1269017).   If
-    an incoming SMS is indicated to be UCS-2, use UTF-16   instead to
-    decode so that emoji's ( which use larger   codepoints than can be
-    encoded in UCS-2 ) are properly   decoded. [ Jussi Pakkanen ]
-    phonesim: add a DBus control interface.   This control interface has
-    been added in order to make   phonesime more flexible for auto-pilot
-    testing of   Touch's network-indicator code. [ Alfonso Sanchez-Beato
-    ] android-apndb.c/-provision.c: fix string comparisions.   Change
-    all usage of g_str_equal() to g_strcmp0(). This   fixes a crash that
-    may happen if the SIM doesn't contain   a SPN file. gril: switch
-    process to radio user.   Temporarily switch ofono's effective uid
-    and gid during startup to that of the radio user to allow connection
-    to the rild socket. gril, rilmodem/sim, unit: retrieve SIM PIN
-    retries (LP: #1206941).   Read PIN retires from ENTER-PIN reply if
-    available. [ Tony Espy ] gril, rilmodem,unit: fix data_call reply
-    error.   Fix a parse error with setup_data_call replies. Also   re-
-    worked SETUP_DATA_CALL to use the current registered   data tech
-    value. Optimized gprs-context to only register   for
-    DATA_CALL_LIST_CHANGED events if the context is   being actively
-    used. [ Alfonso Sanchez-Beato ] src/smsutil, unit: allow
-    concatenated UTF-16 SMS.   This change properly handles split
-    surrogate pairs   in concatenated SMSes, as this can now happen now
-      that UTF-16 is used instead of UCS-2 for decoding   SMS messages
-    that specify UCS-2 encoding. (LP: #1269017, #1299227, #1239869,
+    provisioning database, while mobile-broadband-provider-info is still
+    queried in order to pickup additional Apns. Also added support for
+    combined Internet/MMS contexts by allowing MMS specific properties
+    to be set for OFONO_GPRS_CONTEXT_TYPE_INTERNET contexts.
+
+  [ Alfonso Sanchez-Beato ]
+  * rilmodem/ussd: Fix USSD Initiate hang (LP: #1299227 ).
+  * gril, rilmodem, unit: add SIM write support.
+    This allows ofono's core call-forwarding and message-waiting logic
+    to update persistent state on the SIM, in order to preserve it across
+    reboots.
+  * build, gril, include, plugins, src, drivers/mtkmodem,
+    drivers/rilmodem: add MTK support.
+    This change adds support for MTK-ril modems without breaking compatibility
+    with AOSP-ril modems.
+  * examples, include, plugins, src: support for gid type MVNOs in Android
+    APN database.
+  * gril, rilmodem: fix for call redirections (LP: #1239869).
+    This fix checks and ignores a Qualcomm specific error code that indicates a
+    call has been re-directed by an operator while roaming.
+  * build, gril, rilmodem, unit: add call-barring support.
+  * gril, mtkmodem, rilmodem, unit: MTK followup changes.
+    This change adds unit tests for MTK specific messages. It also consolidates
+    parsing logic for parsing data call lists, which is a valid payload for
+    multiple message types. Finally, the deactivate data call logic on start-
+    up has been re-worked to query the active calls before attempting to
+    deactivate any.
+  * src/smsutil: use UTF-16 instead of UCS-2 (LP: #1269017).
+    If an incoming SMS is indicated to be UCS-2, use UTF-16 instead to
+    decode so that emoji's ( which use larger codepoints than can be
+    encoded in UCS-2 ) are properly decoded.
+
+  [ Jussi Pakkanen ]
+  * phonesim: add a DBus control interface.
+    This control interface has been added in order to make phonesime more
+    flexible for auto-pilot testing of Touch's network-indicator code.
+
+  [ Alfonso Sanchez-Beato ]
+  * android-apndb.c/-provision.c: fix string comparisions.
+    Change all usage of g_str_equal() to g_strcmp0(). This fixes a crash that
+    may happen if the SIM doesn't contain a SPN file.
+  * gril: switch process to radio user.
+    Temporarily switch ofono's effective uid and gid during startup to that
+    of the radio user to allow connection to the rild socket.
+  * gril, rilmodem/sim, unit: retrieve SIM PIN retries (LP: #1206941).
+    Read PIN retires from ENTER-PIN reply if available.
+
+  [ Tony Espy ]
+  * gril, rilmodem,unit: fix data_call reply error.
+    Fix a parse error with setup_data_call replies. Also re-worked
+    SETUP_DATA_CALL to use the current registered data tech value.
+    Optimized gprs-context to only register for DATA_CALL_LIST_CHANGED
+    events if the context is being actively used.
+
+  [ Alfonso Sanchez-Beato ]
+  * src/smsutil, unit: allow concatenated UTF-16 SMS.
+    This change properly handles split surrogate pairs in concatenated SMSes,
+    as this can now happen now that UTF-16 is used instead of UCS-2 for decoding
+    SMS messages that specify UCS-2 encoding. (LP: #1269017, #1299227, #1239869,
     #1206941)
 
  -- Ubuntu daily release <ps-jenkins@lists.canonical.com>  Thu, 01 May 2014 17:16:43 +0000
