@@ -1,10 +1,17 @@
 ofono (1.12.bzr6858+14.10.20140501-0ubuntu2) UNRELEASED; urgency=medium
 
+  [ Tony Espy ]
   * plugins/android-provision.c: fix crash
     Fix a crash in provision_get_settings() caused by the code
     freeing 'error' with g_error_free() but not setting the value
     to NULL afterwards. This can cause a subsequent call to
     g_error_free() to happen again with an invalid pointer value.
+
+  [ Alfonso Sanchez-Beato ]
+  * drivers/mtkmodem/voicecall.c, plugins/mtk: MTK update
+    Add additional new atoms to the mtk plugin.  Also fixed a
+    double voicecall register issue.
+  * gril/grilreply.c, unit/test-grilreply.c: fix infineon reply parsing
 
  -- tony espy <espy@canonical.com>  Mon, 12 May 2014 17:47:41 -0400
 
