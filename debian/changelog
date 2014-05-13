@@ -1,4 +1,4 @@
-ofono (1.12.bzr6858+14.10.20140501-0ubuntu2) UNRELEASED; urgency=medium
+ofono (1.12.bzr6868+14.10.20140513-0ubuntu1) UNRELEASED; urgency=medium
 
   [ Tony Espy ]
   * plugins/android-provision.c: fix crash
