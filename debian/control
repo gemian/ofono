@@ -24,7 +24,6 @@ Vcs-Browser: http://bazaar.launchpad.net/~phablet-team/ofono/ubuntu
 Package: ofono
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, dbus
-Conflicts: modemmanager
 Recommends: udev
 Description: Mobile telephony stack (daemon)
  oFono is a stack for mobile telephony devices on Linux.  oFono supports
