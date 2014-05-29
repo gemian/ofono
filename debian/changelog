@@ -1,8 +1,8 @@
-ofono (1.12.bzr6868+14.10.20140513.1-0ubuntu2) UNRELEASED; urgency=medium
+ofono (1.12.bzr6868+14.10.20140513.1-0ubuntu2) utopic; urgency=medium
 
   * debian/control: don't conflict with modemmanager.
 
- -- Mathieu Trudel-Lapierre <mathieu-tl@ubuntu.com>  Thu, 29 May 2014 14:10:41 +0200
+ -- Mathieu Trudel-Lapierre <mathieu-tl@ubuntu.com>  Thu, 29 May 2014 14:15:37 +0200
 
 ofono (1.12.bzr6868+14.10.20140513.1-0ubuntu1) utopic; urgency=medium
 
