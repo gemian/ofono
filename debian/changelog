@@ -1,3 +1,37 @@
+ofono (1.12.bzr6868+14.10.20140513.1-0ubuntu3) UNRELEASED; urgency=medium
+
+  [ Alfonso Sanchez-Beato ]
+  * src/network.c, src/simutil.c: use OF_OPL to check roaming status
+  * rilmodem/sim.c, plugins/ril.c, android-spn-table.c: fix memory leaks
+  * test: adapt test scripts to multi-sim scenarios
+  * build, drivers/mtkmodem, drivers/rilmodem, gril: add Low-Power mode
+    This change adds RadioSettings low-power support by leveraging
+    the existing FastDormancy property to control entering/exiting low-
+    power mode.  This change also includes support for mtkmodem, which
+    uses MTK-specific requests to handle the same logic.
+  * src/network.c: re-order emission of signals in network atom
+    This change ensures that the NetworkRegistration 'Technology'
+    property is emitted before 'CellId'.  This change was made
+    to fix an issue with a third party location service.
+
+  [ Martti Piirainen ]
+  * test/rilmodem/*: update for Python3, minor cleanup
+    Besides the Python3 change, this change revises some
+    of the tests as the Touch emulator now supports additional
+    modem properties which weren't previously exposed.
+
+  [ Tony Espy ]
+  * build, include, plugins, test: re-merge Nettime code from github
+    Nettime had been previously added directly to bzr, but wasn't
+    present in our upstream github repo for ofono, which caused a
+    conflict every time we merged from lp:~phablet-team/ofono/rilmodem
+    ( our auto-import tree ).
+
+  [ Martti Piirainen ]
+  * test/get-network-time: convert to Python3 & add support multi-SIM
+
+ -- Tony Espy <espy@canonical.com>  Tue, 24 Jun 2014 14:18:25 -0400
+
 ofono (1.12.bzr6868+14.10.20140513.1-0ubuntu2) utopic; urgency=medium
 
   * debian/control: don't conflict with modemmanager.
