@@ -1,3 +1,22 @@
+ofono (1.12.bzr6870+14.10.20140625-0ubuntu1) UNRELEASED; urgency=medium
+
+  [ Martti Piirainen ]
+  * drivers/rilmodem/sim.c: notify on SIM removal (LP: #1332306)
+  * unit/rilmodem/test-sim-online: fix serial number check (LP: #1334867)
+
+  [ Alfonso Sanchez-Beato ]
+  * plugins/mtk.c: fix race condition when onlining modem
+  * build, drivers/infeonmodem, drivers/rilmodem, gril,
+    plugins/infeon.c, plugins/ril.*, unit: add Infeon OEM hooks
+
+  [ Tony Espy ]
+  * build, plugins/ubuntu-provision.c, ubuntu-apndb.*: re-named
+    provisioning plugin code from android-* to ubuntu-*.  Also removed
+    code that queries mobile-broadband-provider-info's db, and finally
+    implemented a /custom hook for custom apn dbs (LP: #1315509).
+
+ -- Tony Espy <espy@canonical.com>  Wed, 16 Jul 2014 15:06:02 -0400
+
 ofono (1.12.bzr6868+14.10.20140625-0ubuntu1) utopic; urgency=medium
 
   [ Alfonso Sanchez-Beato ]
