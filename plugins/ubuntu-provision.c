@@ -26,6 +26,7 @@
 #endif
 
 #include <errno.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include <glib.h>
@@ -50,6 +51,22 @@ static int provision_get_settings(const char *mcc, const char *mnc,
 	GSList *l = NULL;
 	GError *error = NULL;
 	unsigned int i;
+	char *tmp;
+
+	if ((tmp = getenv("OFONO_CUSTOM_MCC")) != NULL)
+		mcc = tmp;
+
+	if ((tmp = getenv("OFONO_CUSTOM_MNC")) != NULL)
+		mnc = tmp;
+
+	if ((tmp = getenv("OFONO_CUSTOM_SPN")) != NULL)
+		spn = tmp;
+
+	if ((tmp = getenv("OFONO_CUSTOM_IMSI")) != NULL)
+		imsi = tmp;
+
+	if ((tmp = getenv("OFONO_CUSTOM_GID1")) != NULL)
+		gid1 = tmp;
 
 	ofono_info("Provisioning for MCC %s, MNC %s, SPN '%s', IMSI '%s', "
 			"GID1 '%s'", mcc, mnc, spn, imsi, gid1);
