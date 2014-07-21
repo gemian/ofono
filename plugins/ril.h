@@ -1,10 +1,8 @@
 /*
  *
- *  oFono - Open Source Telephony
+ *  oFono - Open Source Telephony - RIL-based devices
  *
- *  Copyright (C) 2008-2011  Intel Corporation. All rights reserved.
- *                2013 Simon Busch <morphis@gravedo.de>
- *  Copyright (C) 2014 Canonical Ltd.
+ *  Copyright (C) 2014  Canonical Ltd.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2 as
@@ -21,13 +19,12 @@
  *
  */
 
-struct apndb_provision_data {
-	struct ofono_gprs_provision_data gprs_data;
-	gboolean mvno;
-};
-
-void android_apndb_ap_free(gpointer data);
-
-GSList *android_apndb_lookup_apn(const char *mcc, const char *mnc,
-			const char *spn, const char *imsi, const char *gid1,
-			gboolean *mvno_found, GError **error);
+int ril_create(struct ofono_modem *modem, enum ofono_ril_vendor vendor);
+void ril_remove(struct ofono_modem *modem);
+int ril_enable(struct ofono_modem *modem);
+int ril_disable(struct ofono_modem *modem);
+void ril_pre_sim(struct ofono_modem *modem);
+void ril_post_sim(struct ofono_modem *modem);
+void ril_post_online(struct ofono_modem *modem);
+void ril_set_online(struct ofono_modem *modem, ofono_bool_t online,
+			ofono_modem_online_cb_t callback, void *data);

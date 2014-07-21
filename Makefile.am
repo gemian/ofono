@@ -127,6 +127,9 @@ builtin_sources += plugins/ril.c
 builtin_modules += mtk
 builtin_sources += plugins/mtk.c
 
+builtin_modules += infineon
+builtin_sources += plugins/infineon.c
+
 builtin_modules += androidspntable
 builtin_sources += plugins/android-spn-table.c
 
@@ -506,13 +509,13 @@ endif
 
 if PROVISION
 builtin_sources += plugins/mbpi.h plugins/mbpi.c
-builtin_sources += plugins/android-apndb.h plugins/android-apndb.c
+builtin_sources += plugins/ubuntu-apndb.h plugins/ubuntu-apndb.c
 
 builtin_modules += provision
 builtin_sources += plugins/provision.c
 
-builtin_modules += android_provision
-builtin_sources += plugins/android-provision.c
+builtin_modules += ubuntu_provision
+builtin_sources += plugins/ubuntu-provision.c
 
 builtin_modules += cdma_provision
 builtin_sources += plugins/cdma-provision.c
