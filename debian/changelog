@@ -1,4 +1,4 @@
-ofono (1.12.bzr6870+14.10.20140625-0ubuntu1) UNRELEASED; urgency=medium
+ofono (1.12.bzr6870+14.10.20140721-0ubuntu1) utopic; urgency=medium
 
   [ Martti Piirainen ]
   * drivers/rilmodem/sim.c: notify on SIM removal (LP: #1332306)
@@ -15,7 +15,7 @@ ofono (1.12.bzr6870+14.10.20140625-0ubuntu1) UNRELEASED; urgency=medium
     code that queries mobile-broadband-provider-info's db, and finally
     implemented a /custom hook for custom apn dbs (LP: #1315509).
 
- -- Tony Espy <espy@canonical.com>  Wed, 16 Jul 2014 15:06:02 -0400
+ -- Ubuntu daily release <ps-jenkins@lists.canonical.com>  Mon, 21 Jul 2014 18:59:17 +0000
 
 ofono (1.12.bzr6868+14.10.20140625-0ubuntu1) utopic; urgency=medium
 
