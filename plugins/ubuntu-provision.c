@@ -52,6 +52,7 @@ static int provision_get_settings(const char *mcc, const char *mnc,
 	GError *error = NULL;
 	unsigned int i;
 	char *tmp;
+	int retval = 0;
 
 	if ((tmp = getenv("OFONO_CUSTOM_MCC")) != NULL)
 		mcc = tmp;
@@ -86,10 +87,17 @@ static int provision_get_settings(const char *mcc, const char *mnc,
 
 	DBG("ap_count: '%d'", *count);
 
+	if (*count == 0) {
+		ofono_error("%s: provisioning failed - no APNs found.",
+				__func__);
+
+		retval = -1;
+		goto done;
+	}
+
 	*settings = g_try_new0(struct ofono_gprs_provision_data, *count);
 	if (*settings == NULL) {
-		ofono_error("%s: provisioning failed: %s", __func__,
-				g_strerror(errno));
+		ofono_error("%s: provisioning failed: out-of-memory", __func__);
 
 		g_slist_free_full(apns, ubuntu_apndb_ap_free);
 
@@ -114,10 +122,11 @@ static int provision_get_settings(const char *mcc, const char *mnc,
 		g_free(ap);
 	}
 
+done:
 	if (apns != NULL)
 		g_slist_free(apns);
 
-	return 0;
+	return retval;
 }
 
 static struct ofono_gprs_provision_driver ubuntu_provision_driver = {
