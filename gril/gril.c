@@ -104,6 +104,7 @@ struct ril_s {
 	gboolean in_read_handler;		/* Re-entrancy guard */
 	gboolean in_notify;
 	enum ofono_ril_vendor vendor;
+	int slot;
 	GRilMsgIdToStrFunc req_to_string;
 	GRilMsgIdToStrFunc unsol_to_string;
 };
@@ -377,8 +378,8 @@ static void handle_response(struct ril_s *p, struct ril_msg *message)
 			message->req = req->req;
 
 			if (message->error != RIL_E_SUCCESS)
-				RIL_TRACE(p, "[%04d]< %s failed %s",
-					message->serial_no,
+				RIL_TRACE(p, "[%d,%04d]< %s failed %s",
+					p->slot, message->serial_no,
 					request_id_to_string(p, message->req),
 					ril_error_to_string(message->error));
 
@@ -411,6 +412,17 @@ static void handle_response(struct ril_s *p, struct ril_msg *message)
 			request_id_to_string(p, message->req),
 			message->serial_no);
 
+}
+
+static gboolean node_check_destroyed(struct ril_notify_node *node,
+					gpointer userdata)
+{
+	gboolean val = GPOINTER_TO_UINT(userdata);
+
+	if (node->destroyed == val)
+		return TRUE;
+
+	return FALSE;
 }
 
 static void handle_unsol_req(struct ril_s *p, struct ril_msg *message)
@@ -454,6 +466,11 @@ static void handle_unsol_req(struct ril_s *p, struct ril_msg *message)
 			unsol_request_to_string(p, message->req));
 
 	p->in_notify = FALSE;
+
+	/* Now destroy nodes possibly removed by callbacks */
+	if (found)
+		ril_unregister_all(p, FALSE, node_check_destroyed,
+					GUINT_TO_POINTER(TRUE));
 }
 
 static void dispatch(struct ril_s *p, struct ril_msg *message)
@@ -1190,6 +1207,23 @@ gboolean g_ril_set_trace(GRil *ril, gboolean trace)
 		return FALSE;
 
 	return ril->parent->trace = trace;
+}
+
+gboolean g_ril_set_slot(GRil *ril, int slot)
+{
+	if (ril == NULL || ril->parent == NULL)
+		return FALSE;
+
+	ril->parent->slot = slot;
+	return TRUE;
+}
+
+int g_ril_get_slot(GRil *ril)
+{
+	if (ril == NULL)
+		return 0;
+
+	return ril->parent->slot;
 }
 
 gboolean g_ril_set_debugf(GRil *ril,

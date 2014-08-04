@@ -1,3 +1,24 @@
+ofono (1.12.bzr6872+14.10.20140729-0ubuntu1) UNRELEASED; urgency=medium
+
+  [ Alfonso Sanchez-Beato ]
+  * doc, plugins/nettime.c: multi-modem support for nettime plugin
+  * build, doc, gril, mtkmodem, rilmodem, plugins/ril.c,mtk.c: expose
+    RadioSettings 'ModemTechnologies' property.  This property can be
+    used by clients to determine the supported raido technologies supported
+    by a specific modem instance (LP: #1346790).
+  * gril/gril.c, mtkmodem, plugins/mtk.c, unit: add support for SIM hot insertion/
+    removal support.  Hot-swap is disabled by default.  It can be enabled
+    by defining OFONO_RIL_HOT_SIM_SWAP env var.
+  * gril, rilmodem, plugins/mtk.c,ril.c: MTK MMS fix.  For standalone
+    MMS contexts, the cid and a special MMS-specific data profile need
+    to included in the SETUP_DATA_CALL request.
+  * gril, mtk, ril, mtkmodem, rilmodem: Fix MTK data attachment (LP: #1349911)
+
+  [ Martti Piirainen ]
+  * plugins/ubuntu-apndb.c: fix IMSI provisioning (LP: #1347733)
+
+ -- Tony Espy <espy@canonical.com>  Tue, 29 Jul 2014 16:46:39 -0400
+
 ofono (1.12.bzr6870+14.10.20140721-0ubuntu1) utopic; urgency=medium
 
   [ Martti Piirainen ]

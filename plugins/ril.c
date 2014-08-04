@@ -117,12 +117,17 @@ static void ril_radio_state_changed(struct ril_msg *message, gpointer user_data)
 		switch (radio_state) {
 		case RADIO_STATE_ON:
 
-			if (ril->voice == NULL)
+			if (ril->voice == NULL) {
 				ril->voice =
 					ofono_voicecall_create(modem,
 								ril->vendor,
 								RILMODEM,
 								ril->modem);
+				ofono_call_volume_create(modem, ril->vendor,
+							RILMODEM, ril->modem);
+				ofono_radio_settings_create(modem, ril->vendor,
+							RILMODEM, ril->modem);
+			}
 
 			send_get_sim_status(modem);
 			break;
@@ -274,6 +279,10 @@ void ril_post_sim(struct ofono_modem *modem)
 	struct ofono_gprs *gprs;
 	struct ofono_gprs_context *gc;
 	struct ofono_message_waiting *mw;
+	struct ril_gprs_context_data inet_ctx =
+			{ ril->modem, OFONO_GPRS_CONTEXT_TYPE_INTERNET };
+	struct ril_gprs_context_data mms_ctx =
+			{ ril->modem, OFONO_GPRS_CONTEXT_TYPE_MMS };
 
 	/* TODO: this function should setup:
 	 *  - phonebook
@@ -283,8 +292,7 @@ void ril_post_sim(struct ofono_modem *modem)
 	ofono_sms_create(modem, ril->vendor, RILMODEM, ril->modem);
 
 	gprs = ofono_gprs_create(modem, ril->vendor, RILMODEM, ril->modem);
-	gc = ofono_gprs_context_create(modem, ril->vendor,
-					RILMODEM, ril->modem);
+	gc = ofono_gprs_context_create(modem, ril->vendor, RILMODEM, &inet_ctx);
 
 	if (gc) {
 		ofono_gprs_context_set_type(gc,
@@ -292,8 +300,7 @@ void ril_post_sim(struct ofono_modem *modem)
 		ofono_gprs_add_context(gprs, gc);
 	}
 
-	gc = ofono_gprs_context_create(modem, ril->vendor,
-					RILMODEM, ril->modem);
+	gc = ofono_gprs_context_create(modem, ril->vendor, RILMODEM, &mms_ctx);
 
 	if (gc) {
 		ofono_gprs_context_set_type(gc,
@@ -312,11 +319,9 @@ void ril_post_online(struct ofono_modem *modem)
 {
 	struct ril_data *ril = ofono_modem_get_data(modem);
 
-	ofono_call_volume_create(modem, ril->vendor, RILMODEM, ril->modem);
 	ofono_netreg_create(modem, ril->vendor, RILMODEM, ril->modem);
 	ofono_ussd_create(modem, ril->vendor, RILMODEM, ril->modem);
 	ofono_call_settings_create(modem, ril->vendor, RILMODEM, ril->modem);
-	ofono_radio_settings_create(modem, ril->vendor, RILMODEM, ril->modem);
 	ofono_call_barring_create(modem, ril->vendor, RILMODEM, ril->modem);
 }
 
@@ -381,8 +386,8 @@ static void ril_connected(struct ril_msg *message, gpointer user_data)
 	struct ofono_modem *modem = (struct ofono_modem *) user_data;
 	struct ril_data *ril = ofono_modem_get_data(modem);
 
-        ofono_info("[UNSOL]< %s", g_ril_unsol_request_to_string(ril->modem,
-								message->req));
+	ofono_info("[%d,UNSOL]< %s", g_ril_get_slot(ril->modem),
+		g_ril_unsol_request_to_string(ril->modem, message->req));
 
 	/* TODO: need a disconnect function to restart things! */
 	ril->connected = TRUE;
