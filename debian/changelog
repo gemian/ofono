@@ -1,4 +1,4 @@
-ofono (1.12.bzr6872+14.10.20140729-0ubuntu1) UNRELEASED; urgency=medium
+ofono (1.12.bzr6872+14.10.20140804-0ubuntu1) utopic; urgency=medium
 
   [ Alfonso Sanchez-Beato ]
   * doc, plugins/nettime.c: multi-modem support for nettime plugin
@@ -17,7 +17,7 @@ ofono (1.12.bzr6872+14.10.20140729-0ubuntu1) UNRELEASED; urgency=medium
   [ Martti Piirainen ]
   * plugins/ubuntu-apndb.c: fix IMSI provisioning (LP: #1347733)
 
- -- Tony Espy <espy@canonical.com>  Tue, 29 Jul 2014 16:46:39 -0400
+ -- Ubuntu daily release <ps-jenkins@lists.canonical.com>  Mon, 04 Aug 2014 09:01:34 +0000
 
 ofono (1.12.bzr6870+14.10.20140721-0ubuntu1) utopic; urgency=medium
 
