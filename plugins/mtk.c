@@ -76,12 +76,15 @@
 #define SIM_2_ACTIVE 2
 #define NO_SIM_ACTIVE 0
 
+/* this gives 30s for rild to initialize */
+#define RILD_MAX_CONNECT_RETRIES 5
+#define RILD_CONNECT_RETRY_TIME_S 5
+
 typedef void (*pending_cb_t)(struct cb_data *cbd);
 
 struct mtk_data {
 	GRil *modem;
 	int sim_status_retries;
-	ofono_bool_t have_sim;
 	ofono_bool_t ofono_online;
 	int radio_state;
 	struct ofono_sim *sim;
@@ -94,6 +97,7 @@ struct mtk_data {
 	struct cb_data *pending_online_cbd;
 	ofono_bool_t pending_online;
 	ofono_bool_t gprs_attach;
+	int rild_connect_retries;
 };
 
 /*
@@ -291,25 +295,12 @@ static void sim_status_cb(struct ril_msg *message, gpointer user_data)
 				DBG("Card PRESENT; num_apps: %d",
 					status->num_apps);
 
-				if (!ril->have_sim) {
-					DBG("notify SIM inserted");
-					ril->have_sim = TRUE;
-
-					ofono_sim_inserted_notify(ril->sim,
-									TRUE);
-				}
-
+				ofono_sim_inserted_notify(ril->sim, TRUE);
 			} else {
 				ofono_warn("[slot %d] Card NOT_PRESENT",
 						ril->slot);
 
-				if (ril->have_sim) {
-					DBG("notify SIM removed");
-					ril->have_sim = FALSE;
-
-					ofono_sim_inserted_notify(ril->sim,
-									FALSE);
-				}
+				ofono_sim_inserted_notify(ril->sim, FALSE);
 			}
 			g_ril_reply_free_sim_status(status);
 		}
@@ -336,7 +327,6 @@ static int mtk_probe(struct ofono_modem *modem)
 		goto error;
 	}
 
-	ril->have_sim = FALSE;
 	ril->ofono_online = FALSE;
 	ril->radio_state = RADIO_STATE_UNAVAILABLE;
 
@@ -642,10 +632,8 @@ static void mtk_set_online(struct ofono_modem *modem, ofono_bool_t online,
 	}
 
 	/* Reset mtk_data variables */
-	if (online == FALSE) {
-		ril->have_sim = FALSE;
+	if (online == FALSE)
 		ril->sim_status_retries = 0;
-	}
 
 	if (current_state == NO_SIM_ACTIVE) {
 		/* Old state was off, need to power on the modem */
@@ -764,7 +752,8 @@ static int create_gril(struct ofono_modem *modem)
 	 */
 
 	if (ril->modem == NULL) {
-		DBG("g_ril_new() failed to create modem!");
+		ofono_error("g_ril_new() failed to create modem %d!",
+				ril->slot);
 		return -EIO;
 	}
 
@@ -788,13 +777,32 @@ static int create_gril(struct ofono_modem *modem)
 	return 0;
 }
 
+static gboolean connect_rild(gpointer user_data)
+{
+	struct ofono_modem *modem = (struct ofono_modem *) user_data;
+	struct mtk_data *ril = ofono_modem_get_data(modem);
+
+	ofono_info("Trying to reconnect to slot %d...", ril->slot);
+
+	if (ril->rild_connect_retries++ < RILD_MAX_CONNECT_RETRIES) {
+		if (create_gril(modem) < 0)
+			return TRUE;
+	} else {
+		ofono_error("Exiting, can't connect to rild.");
+		exit(0);
+	}
+
+	return FALSE;
+}
+
 static int mtk_enable(struct ofono_modem *modem)
 {
 	int ret;
 
 	ret = create_gril(modem);
 	if (ret < 0)
-		return ret;
+		g_timeout_add_seconds(RILD_CONNECT_RETRY_TIME_S,
+					connect_rild, modem);
 
 	/*
 	 * We will mark the modem as powered when we receive an event that

@@ -1,3 +1,17 @@
+ofono (1.12.bzr6874+14.10.20140819-0ubuntu1) UNRELEASED; urgency=medium
+
+  * gril, unit, rilmodem:  Fix zero signal strength in MTK modems
+    (LP: #1352339)
+  * rilmodem, unit: Relax DNS validity check, unnecessary for MMS
+    (LP: #1350209)
+  * gril, mtk, ril: Retry when failing to connect to rild
+    (LP: #1356231, #1356204)
+  * ril, mtk, rilmodem: Create SimManager even when there is no SIM
+    (LP: #1356200)
+  * plugins: Add max retry logic for rild connect
+
+ -- Alfonso Sanchez-Beato (email Canonical) <alfonso.sanchez-beato@canonical.com>  Tue, 19 Aug 2014 18:26:57 +0200
+
 ofono (1.12.bzr6872+14.10.20140804-0ubuntu1) utopic; urgency=medium
 
   [ Alfonso Sanchez-Beato ]
