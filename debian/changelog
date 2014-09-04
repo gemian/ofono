@@ -1,3 +1,13 @@
+ofono (1.12.bzr6876+14.10.20140820-0ubuntu1) UNRELEASED; urgency=medium
+
+  [ Jussi Kangas ]
+  * src/gprs.c: Fix to allow MMS properties to be set (LP: #1362068)
+
+  [ Tony Espy ]
+  * rilmodem/sim.c: Fix EnterPIN logic (LP: #1363413)
+
+ -- Tony Espy <espy@canonical.com>  Thu, 04 Sep 2014 17:33:21 -0400
+
 ofono (1.12.bzr6874+14.10.20140820-0ubuntu1) utopic; urgency=medium
 
   [ Martti Piirainen ]
