@@ -1,3 +1,18 @@
+ofono (1.12.bzr6878+14.10.20140904-0ubuntu2) UNRELEASED; urgency=medium
+
+  [ Alfonso Sanchez-Beato ]
+  * include, plugins/mtk.c, src/modem.c,sim.c: Fix PUK crash (LP: #1365481)
+    If the SIM gets locked in particular sequence, ofono will crash
+    while trying to free the list of SIM SPN watch events ( which
+    have already been freed ).  MTK fix is a bit more involved than
+    the stanard RIL logic.
+
+  * plugins/mtk.c,ril.c: Show emergency numbers in flight-mode (LP: #1366188)
+    Modify plugin logic to create the SimManager interface even if
+    no SIM is present.
+
+ -- Ubuntu daily release <ps-jenkins@lists.canonical.com>  Sat, 20 Sep 2014 14:40:37 -0400
+
 ofono (1.12.bzr6876+14.10.20140904-0ubuntu1) utopic; urgency=medium
 
   [ Jussi Kangas ]
