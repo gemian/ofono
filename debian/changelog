@@ -13,7 +13,7 @@ ofono (1.12.bzr6878+14.10.20140904-0ubuntu1) UNRELEASED; urgency=medium
 
   * gril, unit: fix indicator-network crash (LP: #1368675)
     RIL defines a set of network registration states for emergency
-    calling that don't map directly to onfo's states.  This results
+    calling that don't map directly to ofono's states.  This results
     in NetworkRegistration Status not being set at all, which in
     turn crashes the indicator.
 
