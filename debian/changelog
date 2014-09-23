@@ -17,6 +17,12 @@ ofono (1.12.bzr6878+14.10.20140904-0ubuntu2) UNRELEASED; urgency=medium
     in NetworkRegistration Status not being set at all, which in
     turn crashes the indicator.
 
+  [ Tony Espy ]
+  * plugins/ubuntu-apndb.c: allow MMS APNs w/out proxy (LP: #1362008)
+    Prior to this change, MMS APNs w/out a proxy were skipped.
+    Now APNs are skipped if message center is missing, which makes
+    more sense.
+
  -- Ubuntu daily release <ps-jenkins@lists.canonical.com>  Sat, 20 Sep 2014 14:40:37 -0400
 
 ofono (1.12.bzr6876+14.10.20140904-0ubuntu1) utopic; urgency=medium
