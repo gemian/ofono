@@ -1,4 +1,4 @@
-ofono (1.12.bzr6878+14.10.20140904-0ubuntu2) UNRELEASED; urgency=medium
+ofono (1.12.bzr6878+14.10.20140904-0ubuntu1) UNRELEASED; urgency=medium
 
   [ Alfonso Sanchez-Beato ]
   * include, plugins/mtk.c, src/modem.c,sim.c: Fix PUK crash (LP: #1365481)
