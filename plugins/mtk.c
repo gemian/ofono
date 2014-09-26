@@ -94,10 +94,20 @@ struct mtk_data {
 	int slot;
 	struct ril_sim_data sim_data;
 	struct ofono_devinfo *devinfo;
+	struct ofono_voicecall *voicecall;
+	struct ofono_call_volume *callvolume;	
 	struct cb_data *pending_online_cbd;
 	ofono_bool_t pending_online;
 	ofono_bool_t gprs_attach;
 	int rild_connect_retries;
+	struct ofono_sms *sms;
+	struct ofono_netreg *netreg;
+	struct ofono_ussd *ussd;
+	struct ofono_call_settings *call_settings;
+	struct ofono_call_forwarding *call_forwarding;
+	struct ofono_call_barring *call_barring;
+	struct ofono_gprs *gprs;
+	struct ofono_message_waiting *message_waiting;
 };
 
 /*
@@ -377,14 +387,21 @@ static void mtk_post_sim(struct ofono_modem *modem)
 	DBG("slot %d", ril->slot);
 }
 
+/*
+ * sim_state_watch listens to SIM state changes and creates/removes atoms
+ * accordingly. This is needed because we cannot rely on the modem core code,
+ * which handles modem state transitions, to do this due to the SIM not being
+ * accessible in the offline state for mtk modems. This causes a mismatch
+ * between what the core thinks it can do in some states and what the mtk modem
+ * can really do in those. This is a workaround to solve that.
+ */
 static void sim_state_watch(enum ofono_sim_state new_state, void *data)
 {
+	struct ofono_modem *modem = data;
+	struct mtk_data *ril = ofono_modem_get_data(modem);
+
 	if (new_state == OFONO_SIM_STATE_READY) {
-		struct ofono_modem *modem = data;
-		struct mtk_data *ril = ofono_modem_get_data(modem);
-		struct ofono_gprs *gprs;
 		struct ofono_gprs_context *gc;
-		struct ofono_message_waiting *mw;
 		struct mtk_gprs_data gprs_data = { ril->modem, modem };
 		struct ril_gprs_context_data inet_ctx =
 			{ ril->modem, OFONO_GPRS_CONTEXT_TYPE_INTERNET };
@@ -399,22 +416,26 @@ static void sim_state_watch(enum ofono_sim_state new_state, void *data)
 		 *  - stk ( SIM toolkit )
 		 *  - radio_settings
 		 */
-		ofono_sms_create(modem, OFONO_RIL_VENDOR_MTK,
-					RILMODEM, ril->modem);
+		ril->sms = ofono_sms_create(modem, OFONO_RIL_VENDOR_MTK,
+						RILMODEM, ril->modem);
 
 		/* netreg needs access to the SIM (SPN, SPDI) */
-		ofono_netreg_create(modem, OFONO_RIL_VENDOR_MTK,
-					RILMODEM, ril->modem);
-		ofono_ussd_create(modem, OFONO_RIL_VENDOR_MTK,
-					RILMODEM, ril->modem);
-		ofono_call_settings_create(modem, OFONO_RIL_VENDOR_MTK,
+		ril->netreg = ofono_netreg_create(modem, OFONO_RIL_VENDOR_MTK,
+							RILMODEM, ril->modem);
+		ril->ussd = ofono_ussd_create(modem, OFONO_RIL_VENDOR_MTK,
 						RILMODEM, ril->modem);
-		ofono_call_forwarding_create(modem, OFONO_RIL_VENDOR_MTK,
-						RILMODEM, ril->modem);
-		ofono_call_barring_create(modem, OFONO_RIL_VENDOR_MTK,
-						RILMODEM, ril->modem);
+		ril->call_settings =
+			ofono_call_settings_create(modem, OFONO_RIL_VENDOR_MTK,
+							RILMODEM, ril->modem);
+		ril->call_forwarding =
+			ofono_call_forwarding_create(modem,
+							OFONO_RIL_VENDOR_MTK,
+							RILMODEM, ril->modem);
+		ril->call_barring =
+			ofono_call_barring_create(modem, OFONO_RIL_VENDOR_MTK,
+							RILMODEM, ril->modem);
 
-		gprs = ofono_gprs_create(modem, OFONO_RIL_VENDOR_MTK,
+		ril->gprs = ofono_gprs_create(modem, OFONO_RIL_VENDOR_MTK,
 						MTKMODEM, &gprs_data);
 
 		gc = ofono_gprs_context_create(modem, OFONO_RIL_VENDOR_MTK,
@@ -422,7 +443,7 @@ static void sim_state_watch(enum ofono_sim_state new_state, void *data)
 		if (gc) {
 			ofono_gprs_context_set_type(gc,
 					OFONO_GPRS_CONTEXT_TYPE_INTERNET);
-			ofono_gprs_add_context(gprs, gc);
+			ofono_gprs_add_context(ril->gprs, gc);
 		}
 
 		gc = ofono_gprs_context_create(modem, OFONO_RIL_VENDOR_MTK,
@@ -430,12 +451,49 @@ static void sim_state_watch(enum ofono_sim_state new_state, void *data)
 		if (gc) {
 			ofono_gprs_context_set_type(gc,
 					OFONO_GPRS_CONTEXT_TYPE_MMS);
-			ofono_gprs_add_context(gprs, gc);
+			ofono_gprs_add_context(ril->gprs, gc);
 		}
 
-		mw = ofono_message_waiting_create(modem);
-		if (mw)
-			ofono_message_waiting_register(mw);
+		ril->message_waiting = ofono_message_waiting_create(modem);
+		if (ril->message_waiting)
+			ofono_message_waiting_register(ril->message_waiting);
+
+	} else if (new_state == OFONO_SIM_STATE_LOCKED_OUT) {
+
+		DBG("SIM locked, removing atoms");
+
+		if (ril->message_waiting) {
+			ofono_message_waiting_remove(ril->message_waiting);
+			ril->message_waiting = NULL;
+		}
+		if (ril->gprs) {
+			ofono_gprs_remove(ril->gprs);
+			ril->gprs = NULL;
+		}
+		if (ril->call_barring) {
+			ofono_call_barring_remove(ril->call_barring);
+			ril->call_barring = NULL;
+		}
+		if (ril->call_forwarding) {
+			ofono_call_forwarding_remove(ril->call_forwarding);
+			ril->call_forwarding = NULL;
+		}
+		if (ril->call_settings) {
+			ofono_call_settings_remove(ril->call_settings);
+			ril->call_settings = NULL;
+		}
+		if (ril->ussd) {
+			ofono_ussd_remove(ril->ussd);
+			ril->ussd = NULL;
+		}
+		if (ril->netreg) {
+			ofono_netreg_remove(ril->netreg);
+			ril->netreg = NULL;
+		}
+		if (ril->sms) {
+			ofono_sms_remove(ril->sms);
+			ril->sms = NULL;
+		}
 	}
 }
 
@@ -452,12 +510,6 @@ static void mtk_post_online(struct ofono_modem *modem)
 	ril->sim = ofono_sim_create(modem, OFONO_RIL_VENDOR_MTK,
 					RILMODEM, &ril->sim_data);
 	g_assert(ril->sim != NULL);
-
-	/* Create interfaces useful for emergency calls */
-	ofono_voicecall_create(modem, OFONO_RIL_VENDOR_MTK,
-					MTKMODEM, ril->modem);
-	ofono_call_volume_create(modem, OFONO_RIL_VENDOR_MTK,
-					RILMODEM, ril->modem);
 
 	/* Radio settings does not depend on the SIM */
 	ofono_radio_settings_create(modem, OFONO_RIL_VENDOR_MTK,
@@ -658,6 +710,32 @@ static void mtk_set_online(struct ofono_modem *modem, ofono_bool_t online,
 	}
 }
 
+static void create_atoms_on_connection(struct ofono_modem *modem)
+{
+	struct mtk_data *ril = ofono_modem_get_data(modem);
+
+	ril->devinfo = ofono_devinfo_create(modem, OFONO_RIL_VENDOR_MTK,
+						RILMODEM, ril->modem);
+
+	/* Create interfaces useful for emergency calls */
+	ril->voicecall = ofono_voicecall_create(modem, OFONO_RIL_VENDOR_MTK,
+						MTKMODEM, ril->modem);
+	ril->callvolume = ofono_call_volume_create(modem, OFONO_RIL_VENDOR_MTK,
+							RILMODEM, ril->modem);
+}
+
+static void remove_atoms_on_disconnection(struct ofono_modem *modem)
+{
+	struct mtk_data *ril = ofono_modem_get_data(modem);
+
+	ofono_call_volume_remove(ril->callvolume);
+	ril->callvolume = NULL;
+	ofono_voicecall_remove(ril->voicecall);
+	ril->voicecall = NULL;
+	ofono_devinfo_remove(ril->devinfo);
+	ril->devinfo = NULL;
+}
+
 static gboolean mtk_connected(gpointer user_data)
 {
 	struct ofono_modem *modem = (struct ofono_modem *) user_data;
@@ -669,8 +747,7 @@ static gboolean mtk_connected(gpointer user_data)
 
 	ofono_modem_set_powered(modem, TRUE);
 
-	ril->devinfo = ofono_devinfo_create(modem, OFONO_RIL_VENDOR_MTK,
-						RILMODEM, ril->modem);
+	create_atoms_on_connection(modem);
 
 	/* Call the function just once */
 	return FALSE;
@@ -686,8 +763,7 @@ static gboolean reconnect_rild(gpointer user_data)
 	if (create_gril(modem) < 0)
 		return TRUE;
 
-	ril->devinfo = ofono_devinfo_create(modem, OFONO_RIL_VENDOR_MTK,
-						RILMODEM, ril->modem);
+	create_atoms_on_connection(modem);
 
 	if (ril->pending_cb)
 		ril->pending_cb(ril->pending_cbd);
@@ -705,8 +781,8 @@ static void socket_disconnected(gpointer user_data)
 
 	DBG("slot %d", ril->slot);
 
-	/* Uses old gril object, remove and recreate later */
-	ofono_devinfo_remove(ril->devinfo);
+	/* Atoms use old gril object, remove and recreate later */
+	remove_atoms_on_disconnection(modem);
 
 	g_ril_unref(ril->modem);
 	ril->modem = NULL;
@@ -803,6 +879,9 @@ static int mtk_enable(struct ofono_modem *modem)
 	if (ret < 0)
 		g_timeout_add_seconds(RILD_CONNECT_RETRY_TIME_S,
 					connect_rild, modem);
+
+	/* We handle SIM states due to MTK peculiarities */
+	ofono_modem_set_driver_watches_sim(modem, TRUE);
 
 	/*
 	 * We will mark the modem as powered when we receive an event that

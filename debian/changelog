@@ -1,3 +1,44 @@
+ofono (1.12.bzr6878+14.10.20140904-0ubuntu1) UNRELEASED; urgency=medium
+
+  [ Alfonso Sanchez-Beato ]
+  * include, plugins/mtk.c, src/modem.c,sim.c: Fix PUK crash (LP: #1365481)
+    If the SIM gets locked in particular sequence, ofono will crash
+    while trying to free the list of SIM SPN watch events ( which
+    have already been freed ).  MTK fix is a bit more involved than
+    the stanard RIL logic.
+
+  * plugins/mtk.c,ril.c: Show emergency numbers in flight-mode (LP: #1366188)
+    Modify plugin logic to create the SimManager interface even if
+    no SIM is present.
+
+  * gril, unit: fix indicator-network crash (LP: #1368675)
+    RIL defines a set of network registration states for emergency
+    calling that don't map directly to ofono's states.  This results
+    in NetworkRegistration Status not being set at all, which in
+    turn crashes the indicator.
+
+  * rilmodem/gprs.c: fix crash due to stale timer event (LP: # 1373351)
+    A 5s timer is set to retry a STATUS request to RIL, however if
+    FlightMode is enabled, the gprs atom is destroyed, and the pending
+    timer callback has a stale gprs reference.  Now the timer id is
+    stored, and when the atom destroyed, the timer event is cancelled.
+
+  * mtkmodem/radio-setttings.c: fix RadioSettings creation (LP: #1374029 )
+    If the MTK modem returns a RADIO_NOT_AVAIL error in response
+    to a FastDormany RIL request, the RadioSetting initialization
+    callback sequence is broken, and thus the RadioSettings interface
+    isn't created.  This in turn prevents powerd from enabling
+    FastDorancy whenever the screen is turned off, and also has
+    implications for system-settings too.
+
+  [ Tony Espy ]
+  * plugins/ubuntu-apndb.c: allow MMS APNs w/out proxy (LP: #1362008)
+    Prior to this change, MMS APNs w/out a proxy were skipped.
+    Now APNs are skipped if message center is missing, which makes
+    more sense.
+
+ -- Ubuntu daily release <ps-jenkins@lists.canonical.com>  Sat, 20 Sep 2014 14:40:37 -0400
+
 ofono (1.12.bzr6876+14.10.20140904-0ubuntu1) utopic; urgency=medium
 
   [ Jussi Kangas ]
