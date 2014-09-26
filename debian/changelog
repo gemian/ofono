@@ -1,4 +1,4 @@
-ofono (1.12.bzr6878+14.10.20140904-0ubuntu1) UNRELEASED; urgency=medium
+ofono (1.12.bzr6878+14.10.20140926-0ubuntu1) 14.09; urgency=medium
 
   [ Alfonso Sanchez-Beato ]
   * include, plugins/mtk.c, src/modem.c,sim.c: Fix PUK crash (LP: #1365481)
@@ -37,7 +37,10 @@ ofono (1.12.bzr6878+14.10.20140904-0ubuntu1) UNRELEASED; urgency=medium
     Now APNs are skipped if message center is missing, which makes
     more sense.
 
- -- Ubuntu daily release <ps-jenkins@lists.canonical.com>  Sat, 20 Sep 2014 14:40:37 -0400
+  [ Ubuntu daily release ]
+  * New rebuild forced
+
+ -- Ubuntu daily release <ps-jenkins@lists.canonical.com>  Fri, 26 Sep 2014 17:34:10 +0000
 
 ofono (1.12.bzr6876+14.10.20140904-0ubuntu1) utopic; urgency=medium
 
