@@ -17,6 +17,20 @@ ofono (1.12.bzr6878+14.10.20140904-0ubuntu1) UNRELEASED; urgency=medium
     in NetworkRegistration Status not being set at all, which in
     turn crashes the indicator.
 
+  * rilmodem/gprs.c: fix crash due to stale timer event (LP: # 1373351)
+    A 5s timer is set to retry a STATUS request to RIL, however if
+    FlightMode is enabled, the gprs atom is destroyed, and the pending
+    timer callback has a stale gprs reference.  Now the timer id is
+    stored, and when the atom destroyed, the timer event is cancelled.
+
+  * mtkmodem/radio-setttings.c: fix RadioSettings creation (LP: #1374029 )
+    If the MTK modem returns a RADIO_NOT_AVAIL error in response
+    to a FastDormany RIL request, the RadioSetting initialization
+    callback sequence is broken, and thus the RadioSettings interface
+    isn't created.  This in turn prevents powerd from enabling
+    FastDorancy whenever the screen is turned off, and also has
+    implications for system-settings too.
+
   [ Tony Espy ]
   * plugins/ubuntu-apndb.c: allow MMS APNs w/out proxy (LP: #1362008)
     Prior to this change, MMS APNs w/out a proxy were skipped.
