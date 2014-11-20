@@ -1,3 +1,19 @@
+ofono (1.12.bzr6882+14.10.20141120-0ubuntu1) UNRELEASED; urgency=medium
+
+  [ Alfonso Sanchez-Beato ]
+  * grilreply.c, parcel.c, rilmodem: merge data and voice reg parsing
+    This change splits the orginal parsing code for data and voice
+    registration replies, cleaning up some of original parsing code
+    which wasn't very elegant.
+  * Makefile.am, rilmodem, src/sim*.*, include/sim.h,
+    plugins/mtk.c, ril.c: enable SIM phonebook import support
+  * rilmodem/sim.c, plugins/mtk.c, ril.c: fix SIM interface signals (LP: #1376250)
+  * plugins/mtk.c: fix krillin slow socket disconnection (LP: #1388030)
+  * Makefile.am, doc/mtk-settings-api.txt, mtkmodem,
+    plugins/mtk.c, test, unit: support krillin 3g slot switch (LP: #1373388)
+
+ -- Ubuntu daily release <ps-jenkins@lists.canonical.com>  Wed, 19 Nov 2014 18:28:00 -0500
+
 ofono (1.12.bzr6880+14.10.20141010-0ubuntu1) utopic; urgency=medium
 
   [ Alfonso Sanchez-Beato ]
