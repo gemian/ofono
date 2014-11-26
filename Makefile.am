@@ -146,7 +146,8 @@ builtin_sources += drivers/mtkmodem/mtkmodem.h \
 			drivers/mtkmodem/mtkreply.c \
 			drivers/mtkmodem/voicecall.c \
 			drivers/mtkmodem/gprs.c \
-			drivers/mtkmodem/radio-settings.c
+			drivers/mtkmodem/radio-settings.c \
+			drivers/mtkmodem/mtksettings.c
 
 builtin_modules += rilmodem
 builtin_sources += drivers/rilmodem/rilmodem.h \
@@ -166,8 +167,8 @@ builtin_sources += drivers/rilmodem/rilmodem.h \
 			drivers/rilmodem/call-settings.c \
 			drivers/rilmodem/call-forwarding.c \
 			drivers/rilmodem/radio-settings.c \
-			drivers/rilmodem/call-barring.c
-
+			drivers/rilmodem/call-barring.c \
+			drivers/rilmodem/phonebook.c
 endif
 
 if ISIMODEM

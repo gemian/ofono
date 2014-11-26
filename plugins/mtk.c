@@ -66,6 +66,8 @@
 #include "drivers/mtkmodem/mtk_constants.h"
 #include "drivers/mtkmodem/mtkutil.h"
 #include "drivers/mtkmodem/mtkrequest.h"
+#include "drivers/mtkmodem/mtkreply.h"
+#include "drivers/mtkmodem/mtksettings.h"
 
 #define MAX_SIM_STATUS_RETRIES 15
 
@@ -76,9 +78,17 @@
 #define SIM_2_ACTIVE 2
 #define NO_SIM_ACTIVE 0
 
+#define SOCKET_NUM_FOR_DBG_0 -1
+#define SOCKET_NUM_FOR_DBG_1 -2
+
 /* this gives 30s for rild to initialize */
 #define RILD_MAX_CONNECT_RETRIES 5
 #define RILD_CONNECT_RETRY_TIME_S 5
+
+#define T_WAIT_DISCONN_MS 1000
+
+static const char hex_slot_0[] = "Slot 0: ";
+static const char hex_slot_1[] = "Slot 1: ";
 
 typedef void (*pending_cb_t)(struct cb_data *cbd);
 
@@ -86,6 +96,7 @@ struct mtk_data {
 	GRil *modem;
 	int sim_status_retries;
 	ofono_bool_t ofono_online;
+	ofono_bool_t ofono_online_target;
 	int radio_state;
 	struct ofono_sim *sim;
 	/* pending_* are used in case we are disconnected from the socket */
@@ -106,8 +117,12 @@ struct mtk_data {
 	struct ofono_call_settings *call_settings;
 	struct ofono_call_forwarding *call_forwarding;
 	struct ofono_call_barring *call_barring;
+	struct ofono_phonebook *phonebook;
 	struct ofono_gprs *gprs;
 	struct ofono_message_waiting *message_waiting;
+	struct ofono_modem *ofono_modem;
+	ofono_bool_t has_3g;
+	struct mtk_settings_data *mtk_settings;
 };
 
 /*
@@ -119,11 +134,27 @@ struct mtk_data {
 static struct mtk_data *mtk_0;
 static struct mtk_data *mtk_1;
 
-static void send_get_sim_status(struct ofono_modem *modem);
+/* Some variables control global state of the modem and are then static */
+static gboolean disconnect_expected;
+static guint not_disconn_cb_id;
+
+struct socket_data {
+	GRil *gril;
+	const char *path;
+	int radio_state;
+	guint radio_state_ev_id;
+};
+
+static struct socket_data *sock_0, *sock_1;
+
 static int create_gril(struct ofono_modem *modem);
 static gboolean mtk_connected(gpointer user_data);
 static void mtk_set_online(struct ofono_modem *modem, ofono_bool_t online,
 				ofono_modem_online_cb_t callback, void *data);
+static void query_3g_caps(struct socket_data *sock);
+static void socket_disconnected(gpointer user_data);
+static void start_slot(struct mtk_data *ril, struct socket_data *sock,
+			const char *hex_prefix);
 
 static void mtk_debug(const char *str, void *user_data)
 {
@@ -138,6 +169,14 @@ static struct mtk_data *ril_complement(struct mtk_data *ril)
 		return mtk_1;
 	else
 		return mtk_0;
+}
+
+static struct socket_data *socket_complement(struct socket_data *sock)
+{
+	if (sock == sock_0)
+		return sock_1;
+	else
+		return sock_0;
 }
 
 /*
@@ -191,13 +230,34 @@ void mtk_detach_received(struct ofono_modem *modem)
 	}
 }
 
-static gboolean sim_status_retry(gpointer user_data)
+static void radio_state_changed(struct ril_msg *message, gpointer user_data)
 {
-	struct ofono_modem *modem = user_data;
-	send_get_sim_status(modem);
+	struct socket_data *sock = user_data;
+	int radio_state = g_ril_unsol_parse_radio_state_changed(sock->gril,
+								message);
 
-	/* Makes this a single shot */
-	return FALSE;
+	if (radio_state != sock->radio_state) {
+		struct socket_data *sock_c = socket_complement(sock);
+
+		ofono_info("%s, state: %s", __func__,
+				ril_radio_state_to_string(radio_state));
+
+		/*
+		 * If there is just one slot, just start it. Otherwise, we ask
+		 * who owns the 3G capabilities in case both slots have already
+		 * radio state different from UNAVAILABLE.
+		 */
+		if (mtk_1 == NULL) {
+			mtk_0->has_3g = TRUE;
+			start_slot(mtk_0, sock, hex_slot_0);
+		} else if (sock->radio_state == RADIO_STATE_UNAVAILABLE &&
+				sock_c != NULL && sock_c->radio_state !=
+						RADIO_STATE_UNAVAILABLE) {
+			query_3g_caps(sock);
+		}
+
+		sock->radio_state = radio_state;
+	}
 }
 
 static void mtk_radio_state_changed(struct ril_msg *message, gpointer user_data)
@@ -213,9 +273,6 @@ static void mtk_radio_state_changed(struct ril_msg *message, gpointer user_data)
 				__func__, ril->slot,
 				ril_radio_state_to_string(radio_state),
 				ril->ofono_online);
-
-		if (ril->radio_state == RADIO_STATE_UNAVAILABLE)
-			mtk_connected(modem);
 
 		ril->radio_state = radio_state;
 
@@ -269,65 +326,6 @@ static void sim_inserted(struct ril_msg *message, gpointer user_data)
 	}
 }
 
-static void sim_status_cb(struct ril_msg *message, gpointer user_data)
-{
-	struct ofono_modem *modem = user_data;
-	struct mtk_data *ril = ofono_modem_get_data(modem);
-	struct reply_sim_status *status;
-
-	DBG("slot %d", ril->slot);
-
-	if (message->error != RIL_E_SUCCESS) {
-		ril->sim_status_retries++;
-
-		ofono_error("[slot %d] GET_SIM_STATUS request failed: "
-				"%s; retries: %d",
-				ril->slot, ril_error_to_string(message->error),
-				ril->sim_status_retries);
-
-		if (ril->sim_status_retries < MAX_SIM_STATUS_RETRIES)
-			g_timeout_add_seconds(2, sim_status_retry, modem);
-		else
-			ofono_error("[slot %d] Max retries for GET_SIM_STATUS"
-					" exceeded!", ril->slot);
-	} else {
-
-		/* Register for changes in SIM insertion */
-		g_ril_register(ril->modem, MTK_RIL_UNSOL_SIM_PLUG_OUT,
-				sim_removed, modem);
-		g_ril_register(ril->modem, MTK_RIL_UNSOL_SIM_PLUG_IN,
-				sim_inserted, modem);
-
-		if ((status = g_ril_reply_parse_sim_status(ril->modem, message))
-				!= NULL) {
-
-			if (status->card_state == RIL_CARDSTATE_PRESENT) {
-				DBG("Card PRESENT; num_apps: %d",
-					status->num_apps);
-
-				ofono_sim_inserted_notify(ril->sim, TRUE);
-			} else {
-				ofono_warn("[slot %d] Card NOT_PRESENT",
-						ril->slot);
-
-				ofono_sim_inserted_notify(ril->sim, FALSE);
-			}
-			g_ril_reply_free_sim_status(status);
-		}
-	}
-}
-
-static void send_get_sim_status(struct ofono_modem *modem)
-{
-	struct mtk_data *ril = ofono_modem_get_data(modem);
-
-	DBG("slot %d", ril->slot);
-
-	if (g_ril_send(ril->modem, RIL_REQUEST_GET_SIM_STATUS, NULL,
-			sim_status_cb, modem, NULL) == 0)
-		ofono_error("%s: failure sending request", __func__);
-}
-
 static int mtk_probe(struct ofono_modem *modem)
 {
 	struct mtk_data *ril = g_try_new0(struct mtk_data, 1);
@@ -348,6 +346,8 @@ static int mtk_probe(struct ofono_modem *modem)
 		mtk_1 = ril;
 
 	DBG("slot %d", ril->slot);
+
+	ril->ofono_modem = modem;
 
 	ofono_modem_set_data(modem, ril);
 
@@ -434,7 +434,9 @@ static void sim_state_watch(enum ofono_sim_state new_state, void *data)
 		ril->call_barring =
 			ofono_call_barring_create(modem, OFONO_RIL_VENDOR_MTK,
 							RILMODEM, ril->modem);
-
+		ril->phonebook =
+			ofono_phonebook_create(modem, OFONO_RIL_VENDOR_MTK,
+						RILMODEM, modem);
 		ril->gprs = ofono_gprs_create(modem, OFONO_RIL_VENDOR_MTK,
 						MTKMODEM, &gprs_data);
 
@@ -469,6 +471,10 @@ static void sim_state_watch(enum ofono_sim_state new_state, void *data)
 		if (ril->gprs) {
 			ofono_gprs_remove(ril->gprs);
 			ril->gprs = NULL;
+		}
+		if (ril->phonebook) {
+			ofono_phonebook_remove(ril->phonebook);
+			ril->phonebook = NULL;
 		}
 		if (ril->call_barring) {
 			ofono_call_barring_remove(ril->call_barring);
@@ -515,9 +521,11 @@ static void mtk_post_online(struct ofono_modem *modem)
 	ofono_radio_settings_create(modem, OFONO_RIL_VENDOR_MTK,
 					MTKMODEM, ril->modem);
 
-	/* Ask sim status */
-	ril->sim_status_retries = 0;
-	send_get_sim_status(modem);
+	/* Register for changes in SIM insertion */
+	g_ril_register(ril->modem, MTK_RIL_UNSOL_SIM_PLUG_OUT,
+			sim_removed, modem);
+	g_ril_register(ril->modem, MTK_RIL_UNSOL_SIM_PLUG_IN,
+			sim_inserted, modem);
 }
 
 static void mtk_sim_mode_cb(struct ril_msg *message, gpointer user_data)
@@ -540,11 +548,18 @@ static void mtk_sim_mode_cb(struct ril_msg *message, gpointer user_data)
 		CALLBACK_WITH_FAILURE(cb, cbd->data);
 	}
 
+	if (ril->ofono_online)
+		ril->mtk_settings =
+			mtk_settings_create(ril->ofono_modem, ril->modem,
+						ril->has_3g);
+	else
+		mtk_settings_remove(ril->mtk_settings);
+
 	/* Execute possible pending operation on the other modem */
 
 	ril_c = ril_complement(ril);
 
-	if (ril_c->pending_online_cbd) {
+	if (ril_c != NULL && ril_c->pending_online_cbd) {
 		struct cb_data *pending_cbd = ril_c->pending_online_cbd;
 		ofono_modem_online_cb_t pending_cb = pending_cbd->cb;
 
@@ -594,6 +609,18 @@ static void mtk_send_sim_mode(GRilResponseFunc func, gpointer user_data)
 	}
 }
 
+static gboolean no_disconnect_case(gpointer user_data)
+{
+	struct cb_data *cbd = user_data;
+
+	ofono_info("%s: Execute pending sim mode switch", __func__);
+	not_disconn_cb_id = 0;
+
+	mtk_send_sim_mode(mtk_sim_mode_cb, cbd);
+
+	return FALSE;
+}
+
 static void poweron_cb(struct ril_msg *message, gpointer user_data)
 {
 	struct cb_data *cbd = user_data;
@@ -603,10 +630,41 @@ static void poweron_cb(struct ril_msg *message, gpointer user_data)
 
 	DBG("");
 
+	/*
+	 * MTK's rild behavior when a POWERON is sent to it is different
+	 * depending on whether a previous POWEROFF had been sent. When
+	 * the modem is initialized during device startup, POWERON is
+	 * sent without a prior POWEROFF, rild responds with an OK reply,
+	 * and the modem is brought up. Any subsequent POWERON requests
+	 * are sent whenever both modems have been offlined before ( meaning a
+	 * POWEROFF has been sent prior ). rild may respond to the POWERON
+	 * request, but will usually ( always? ) trigger a socket disconnect in
+	 * this case.
+	 *
+	 * This means there's a race condition between the POWERON reply
+	 * callback and the socket disconnect function ( which triggers a
+	 * SIM_MODE_SWITCH request ). In some cases rild is slower than
+	 * usual closing the socket, so we add a timeout to avoid following
+	 * the code path used when there is not a disconnection. Otherwise,
+	 * there would be a race and some requests would return errors due to
+	 * having been sent through the about-to-be-disconnected socket, leaving
+	 * ofono in an inconsistent state. So, we delay sending the
+	 * SIM_MODE_SWITCH for 1s, to allow the disconnect to happen when we
+	 * know that we have sent previously a POWEROFF.
+	 *
+	 * Also, I saw once that sending SIM_MODE while the
+	 * socket was being disconnected provoked a crash due to SIGPIPE being
+	 * issued. The timeout should also fix this.
+	 */
+
 	if (message->error == RIL_E_SUCCESS) {
 		g_ril_print_response_no_args(ril->modem, message);
 
-		mtk_send_sim_mode(mtk_sim_mode_cb, cbd);
+		if (disconnect_expected)
+			not_disconn_cb_id = g_timeout_add(T_WAIT_DISCONN_MS,
+						no_disconnect_case, cbd);
+		else
+			mtk_send_sim_mode(mtk_sim_mode_cb, cbd);
 	} else {
 		ofono_error("%s RADIO_POWERON error %s", __func__,
 				ril_error_to_string(message->error));
@@ -631,6 +689,8 @@ static void online_off_cb(struct ril_msg *message, gpointer user_data)
 
 	if (message->error == RIL_E_SUCCESS) {
 		g_ril_print_response_no_args(ril->modem, message);
+
+		mtk_settings_remove(ril->mtk_settings);
 
 		CALLBACK_WITH_SUCCESS(cb, cbd->data);
 	} else {
@@ -704,10 +764,45 @@ static void mtk_set_online(struct ofono_modem *modem, ofono_bool_t online,
 			ofono_error("%s: failure sending request", __func__);
 			CALLBACK_WITH_FAILURE(cb, cbd->data);
 			g_free(cbd);
+		} else {
+			disconnect_expected = TRUE;
 		}
 	} else {
 		mtk_send_sim_mode(mtk_sim_mode_cb, cbd);
 	}
+}
+
+static void set_online_cb(const struct ofono_error *error, void *data)
+{
+	if (mtk_1->ofono_online_target && !mtk_1->ofono_online)
+		mtk_set_online(mtk_1->ofono_modem, TRUE, set_online_cb, NULL);
+}
+
+static void set_offline_cb(const struct ofono_error *error, void *data)
+{
+	if (mtk_1->ofono_online)
+		mtk_set_online(mtk_1->ofono_modem, FALSE, set_offline_cb, NULL);
+	else if (mtk_0->ofono_online_target)
+		mtk_set_online(mtk_0->ofono_modem, TRUE, set_online_cb, NULL);
+	else
+		mtk_set_online(mtk_1->ofono_modem, TRUE, set_online_cb, NULL);
+}
+
+void mtk_reset_all_modems(void)
+{
+	if (!mtk_0->ofono_online && !mtk_1->ofono_online)
+		return;
+
+	mtk_0->ofono_online_target = mtk_0->ofono_online;
+	mtk_1->ofono_online_target = mtk_1->ofono_online;
+
+	ofono_modem_set_powered(mtk_0->ofono_modem, FALSE);
+	ofono_modem_set_powered(mtk_1->ofono_modem, FALSE);
+
+	if (mtk_0->ofono_online)
+		mtk_set_online(mtk_0->ofono_modem, FALSE, set_offline_cb, NULL);
+	else
+		mtk_set_online(mtk_1->ofono_modem, FALSE, set_offline_cb, NULL);
 }
 
 static void create_atoms_on_connection(struct ofono_modem *modem)
@@ -728,12 +823,95 @@ static void remove_atoms_on_disconnection(struct ofono_modem *modem)
 {
 	struct mtk_data *ril = ofono_modem_get_data(modem);
 
-	ofono_call_volume_remove(ril->callvolume);
+	if (__ofono_modem_find_atom(modem, OFONO_ATOM_TYPES_CALL_VOLUME))
+		ofono_call_volume_remove(ril->callvolume);
 	ril->callvolume = NULL;
-	ofono_voicecall_remove(ril->voicecall);
+	if (__ofono_modem_find_atom(modem, OFONO_ATOM_TYPE_VOICECALL))
+		ofono_voicecall_remove(ril->voicecall);
 	ril->voicecall = NULL;
-	ofono_devinfo_remove(ril->devinfo);
+	if (__ofono_modem_find_atom(modem, OFONO_ATOM_TYPE_DEVINFO))
+		ofono_devinfo_remove(ril->devinfo);
 	ril->devinfo = NULL;
+}
+
+static void start_slot(struct mtk_data *ril, struct socket_data *sock,
+			const char *hex_prefix)
+{
+	ofono_info("Physical slot %d in socket %s", ril->slot, sock->path);
+
+	ril->modem = sock->gril;
+	ril->radio_state = sock->radio_state;
+
+	g_ril_set_slot(ril->modem, ril->slot);
+
+	if (getenv("OFONO_RIL_TRACE"))
+		g_ril_set_trace(ril->modem, TRUE);
+
+	if (getenv("OFONO_RIL_HEX_TRACE"))
+		g_ril_set_debugf(ril->modem, mtk_debug, (char *) hex_prefix);
+
+	g_ril_set_disconnect_function(ril->modem, socket_disconnected,
+					ril->ofono_modem);
+
+	g_ril_unregister(sock->gril, sock->radio_state_ev_id);
+
+	g_ril_register(ril->modem, RIL_UNSOL_RESPONSE_RADIO_STATE_CHANGED,
+			mtk_radio_state_changed, ril->ofono_modem);
+
+	mtk_connected(ril->ofono_modem);
+}
+
+static void query_3g_caps_cb(struct ril_msg *message, gpointer user_data)
+{
+	struct socket_data *sock = user_data;
+	struct socket_data *sock_for_mtk_0, *sock_for_mtk_1;
+	int slot_3g;
+
+	if (message->error != RIL_E_SUCCESS) {
+		ofono_error("%s: error %s", __func__,
+				ril_error_to_string(message->error));
+		return;
+	}
+
+	slot_3g = g_mtk_reply_parse_get_3g_capability(sock->gril, message);
+
+	/*
+	 * The socket at sock_slot_0 always connects to the slot with 3G
+	 * capabilities, while sock_slot_1 connects to the slot that is just 2G.
+	 * However, the physical slot that owns the 3G capabilities can be
+	 * changed dynamically using a RILd request, so the sockets can connect
+	 * to different physical slots depending on the current configuration.
+	 * We want to keep the relationship between the physical slots and
+	 * the modem names in DBus (so /ril_0 and /ril_1 always refer to the
+	 * same physical slots), so here we assign the sockets needed by mtk_0
+	 * and mtk_1 structures to make sure that happens.
+	 */
+	if (slot_3g == MULTISIM_SLOT_0) {
+		sock_for_mtk_0 = sock_0;
+		sock_for_mtk_1 = sock_1;
+		mtk_0->has_3g = TRUE;
+		mtk_1->has_3g = FALSE;
+	} else {
+		sock_for_mtk_0 = sock_1;
+		sock_for_mtk_1 = sock_0;
+		mtk_0->has_3g = FALSE;
+		mtk_1->has_3g = TRUE;
+	}
+
+	start_slot(mtk_0, sock_for_mtk_0, hex_slot_0);
+	start_slot(mtk_1, sock_for_mtk_1, hex_slot_1);
+
+	g_free(sock_0);
+	sock_0 = NULL;
+	g_free(sock_1);
+	sock_1 = NULL;
+}
+
+static void query_3g_caps(struct socket_data *sock)
+{
+	if (g_ril_send(sock->gril, MTK_RIL_REQUEST_GET_3G_CAPABILITY, NULL,
+			query_3g_caps_cb, sock, NULL) <= 0)
+		ofono_error("%s Error querying 3G capabilities", __func__);
 }
 
 static gboolean mtk_connected(gpointer user_data)
@@ -745,9 +923,13 @@ static gboolean mtk_connected(gpointer user_data)
 
 	DBG("calling set_powered(TRUE)");
 
-	ofono_modem_set_powered(modem, TRUE);
+	if (!ofono_modem_get_powered(modem))
+		ofono_modem_set_powered(modem, TRUE);
 
 	create_atoms_on_connection(modem);
+
+	if (ril->pending_cb)
+		ril->pending_cb(ril->pending_cbd);
 
 	/* Call the function just once */
 	return FALSE;
@@ -762,11 +944,6 @@ static gboolean reconnect_rild(gpointer user_data)
 
 	if (create_gril(modem) < 0)
 		return TRUE;
-
-	create_atoms_on_connection(modem);
-
-	if (ril->pending_cb)
-		ril->pending_cb(ril->pending_cbd);
 
 	/* Reconnected: do not call this again */
 	return FALSE;
@@ -787,36 +964,46 @@ static void socket_disconnected(gpointer user_data)
 	g_ril_unref(ril->modem);
 	ril->modem = NULL;
 
+	/* Disconnection happened so we do not call failsafe function */
+	if (not_disconn_cb_id != 0) {
+		g_source_remove(not_disconn_cb_id);
+		not_disconn_cb_id = 0;
+	}
+
 	/* The disconnection happens because rild is re-starting, wait for it */
 	g_timeout_add(WAIT_FOR_RILD_TO_RESTART_MS, reconnect_rild, modem);
 }
 
 static const char sock_slot_0[] = "/dev/socket/rild";
 static const char sock_slot_1[] = "/dev/socket/rild2";
-static const char hex_slot_0[] = "Slot 0: ";
-static const char hex_slot_1[] = "Slot 1: ";
 
 static int create_gril(struct ofono_modem *modem)
 {
 	struct mtk_data *ril = ofono_modem_get_data(modem);
-	const char *sock_path;
-	const char *hex_prefix;
+	struct socket_data *sock;
+	int sock_num;
 
 	DBG("slot %d", ril->slot);
 
 	if (ril->modem != NULL)
 		return 0;
 
+	sock = g_try_malloc0(sizeof(*sock));
+	if (sock == NULL) {
+		ofono_error("%s: Cannot allocate socket_data", __func__);
+		return -ENOMEM;
+	}
+
 	if (ril->slot == MULTISIM_SLOT_0) {
-		sock_path = sock_slot_0;
-		hex_prefix = hex_slot_0;
+		sock_num = SOCKET_NUM_FOR_DBG_0;
+		sock->path = sock_slot_0;
 	} else {
-		sock_path = sock_slot_1;
-		hex_prefix = hex_slot_1;
+		sock_num = SOCKET_NUM_FOR_DBG_1;
+		sock->path = sock_slot_1;
 	}
 
 	/* Opens the socket to RIL */
-	ril->modem = g_ril_new(sock_path, OFONO_RIL_VENDOR_MTK);
+	sock->gril = g_ril_new(sock->path, OFONO_RIL_VENDOR_MTK);
 
 	/*
 	 * NOTE: Since AT modems open a tty, and then call
@@ -827,28 +1014,34 @@ static int create_gril(struct ofono_modem *modem)
 	 * abstraction... ( probaby not a bad idea ).
 	 */
 
-	if (ril->modem == NULL) {
-		ofono_error("g_ril_new() failed to create modem %d!",
-				ril->slot);
+	if (sock->gril == NULL) {
+		ofono_error("g_ril_new() failed to connect to %s!", sock->path);
+		g_free(sock);
 		return -EIO;
+	} else if (ril->slot == MULTISIM_SLOT_0) {
+		sock_0 = sock;
+	} else {
+		sock_1 = sock;
 	}
 
-	g_ril_set_slot(ril->modem, ril->slot);
+	sock->radio_state = RADIO_STATE_UNAVAILABLE;
+	sock->radio_state_ev_id =
+		g_ril_register(sock->gril,
+				RIL_UNSOL_RESPONSE_RADIO_STATE_CHANGED,
+				radio_state_changed, sock);
 
-	g_ril_set_vendor_print_msg_id_funcs(ril->modem,
+	/* sock_num is negative to avoid confusion with physical slots */
+	g_ril_set_slot(sock->gril, sock_num);
+
+	g_ril_set_vendor_print_msg_id_funcs(sock->gril,
 						mtk_request_id_to_string,
 						mtk_unsol_request_to_string);
 
 	if (getenv("OFONO_RIL_TRACE"))
-		g_ril_set_trace(ril->modem, TRUE);
+		g_ril_set_trace(sock->gril, TRUE);
 
 	if (getenv("OFONO_RIL_HEX_TRACE"))
-		g_ril_set_debugf(ril->modem, mtk_debug, (char *) hex_prefix);
-
-	g_ril_set_disconnect_function(ril->modem, socket_disconnected, modem);
-
-	g_ril_register(ril->modem, RIL_UNSOL_RESPONSE_RADIO_STATE_CHANGED,
-			mtk_radio_state_changed, modem);
+		g_ril_set_debugf(sock->gril, mtk_debug, (char *) sock->path);
 
 	return 0;
 }
@@ -875,13 +1068,13 @@ static int mtk_enable(struct ofono_modem *modem)
 {
 	int ret;
 
+	/* We handle SIM states due to MTK peculiarities */
+	ofono_modem_set_driver_watches_sim(modem, TRUE);
+
 	ret = create_gril(modem);
 	if (ret < 0)
 		g_timeout_add_seconds(RILD_CONNECT_RETRY_TIME_S,
 					connect_rild, modem);
-
-	/* We handle SIM states due to MTK peculiarities */
-	ofono_modem_set_driver_watches_sim(modem, TRUE);
 
 	/*
 	 * We will mark the modem as powered when we receive an event that
@@ -896,6 +1089,11 @@ static int mtk_disable(struct ofono_modem *modem)
 	struct mtk_data *ril = ofono_modem_get_data(modem);
 
 	DBG("%p", modem);
+
+	if (ril->slot == MULTISIM_SLOT_0 && not_disconn_cb_id != 0) {
+		g_source_remove(not_disconn_cb_id);
+		not_disconn_cb_id = 0;
+	}
 
 	if (ril->ofono_online) {
 		ril->ofono_online = FALSE;
