@@ -10,7 +10,7 @@ CFLAGS += -Wall -Werror -Wextra \
 	-DG_DISABLE_DEPRECATED
 
 %:
-	dh $@ --parallel --with=autoreconf
+	dh $@ --parallel --with=autoreconf,systemd
 
 override_dh_auto_configure:
 	dh_auto_configure -- --enable-bluetooth --enable-dundee
