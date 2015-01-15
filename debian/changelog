@@ -1,3 +1,10 @@
+ofono (1.12.bzr6882+15.04.20150115-0ubuntu1) vivid; urgency=low
+
+  [ Martin Pitt ]
+  * Add systemd unit.
+
+ -- Ubuntu daily release <ps-jenkins@lists.canonical.com>  Thu, 15 Jan 2015 16:26:34 +0000
+
 ofono (1.12.bzr6882+15.04.20141126-0ubuntu1) vivid; urgency=medium
 
   [ Alfonso Sanchez-Beato ]
