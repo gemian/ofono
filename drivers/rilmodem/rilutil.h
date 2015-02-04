@@ -36,6 +36,8 @@
 #define PREFIX_25_NETMASK "255.255.255.128"
 #define PREFIX_24_NETMASK "255.255.255.0"
 
+#define MODEM_PROP_LTE_CAPABLE "lte-capable"
+
 enum ril_util_sms_store {
 	RIL_UTIL_SMS_STORE_SM =	0,
 	RIL_UTIL_SMS_STORE_ME =	1,
@@ -65,29 +67,6 @@ enum at_util_charset {
 	RIL_UTIL_CHARSET_8859_H =	0x10000,
 };
 
-/* TODO: consider moving these to ril_constants.h */
-enum app_state {
-	APPSTATE_UNKNOWN,
-	APPSTATE_DETECTED,
-	APPSTATE_PIN,
-	APPSTATE_PUK,
-	APPSTATE_SUBSCRIPTION_PERSO,
-	APPSTATE_READY,
-};
-
-enum perso_state {
-	PERSOSUBSTATE_SIM_NETWORK = 3,
-	PERSOSUBSTATE_SIM_NETWORK_SUBSET,
-	PERSOSUBSTATE_SIM_CORPORATE,
-	PERSOSUBSTATE_SIM_SERVICE_PROVIDER,
-	PERSOSUBSTATE_SIM_SIM,
-	PERSOSUBSTATE_SIM_NETWORK_PUK,
-	PERSOSUBSTATE_SIM_NETWORK_SUBSET_PUK,
-	PERSOSUBSTATE_SIM_CORPORATE_PUK,
-	PERSOSUBSTATE_SIM_SERVICE_PROVIDER_PUK,
-	PERSOSUBSTATE_SIM_SIM_PUK,
-};
-
 struct ril_sim_data {
 	struct ofono_modem *modem;
 	GRil *gril;
@@ -97,6 +76,21 @@ struct ril_sim_data {
 struct ril_gprs_context_data {
 	GRil *gril;
 	enum ofono_gprs_context_type type;
+};
+
+struct ril_voicecall_driver_data {
+	GRil *gril;
+	struct ofono_modem *modem;
+};
+
+struct ril_gprs_driver_data {
+	GRil *gril;
+	struct ofono_modem *modem;
+};
+
+struct ril_radio_settings_driver_data {
+	GRil *gril;
+	struct ofono_modem *modem;
 };
 
 typedef void (*ril_util_sim_inserted_cb_t)(gboolean present, void *userdata);
