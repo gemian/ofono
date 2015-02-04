@@ -1,4 +1,4 @@
-ofono (1.12.bzr6886+15.04.20150203-0ubuntu1) UNRELEASED; urgency=medium
+ofono (1.12.bzr6886+15.04.20150204-0ubuntu1) vivid; urgency=medium
 
   [ Tony Espy ]
   * test/rilmodem/sim: add new SIM test scripts
@@ -33,7 +33,7 @@ ofono (1.12.bzr6886+15.04.20150203-0ubuntu1) UNRELEASED; urgency=medium
     query ).  If detected, a RIL_INITIAL_ATTACH_APN request
     is not sent to the modem during gprs initialization.
 
- -- Ubuntu daily release <ps-jenkins@lists.canonical.com>  Tue, 03 Feb 2015 18:17:48 -0500
+ -- Ubuntu daily release <ps-jenkins@lists.canonical.com>  Wed, 04 Feb 2015 09:18:00 +0000
 
 ofono (1.12.bzr6882+15.04.20150115-0ubuntu1) vivid; urgency=low
 
