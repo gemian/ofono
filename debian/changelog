@@ -1,3 +1,18 @@
+ofono (1.12.bzr6888+15.04.20150223-0ubuntu1) UNRELEASED; urgency=medium
+
+  [ Alfonso Sanchez-Beato ]
+  * mtkmodem/voicecall.c: fix fast call answer (LP: #1422401)
+    Fix problem that occurs when calls are answer too quickly.
+  * mtk.c: wait for radio event before onlining (LP: #1419675)
+    Ensure that the 2nd SIM slot on krillin is always
+    initialized properly.
+  * gril/grilrequest.c, unit: support empty APN
+    Allow data calls with GPRS contexts that have empty APNs.
+  * grilreply.c, grilutil.c, ril_constants.c: fix arale parcel parsing
+    Fix parcel parsing issues with radio tech and SIM PIN retries.
+
+ -- Ubuntu daily release <ps-jenkins@lists.canonical.com>  Mon, 23 Feb 2015 12:45:21 -0500
+
 ofono (1.12.bzr6886+15.04.20150204-0ubuntu1) vivid; urgency=medium
 
   [ Tony Espy ]
