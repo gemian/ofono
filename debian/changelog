@@ -1,9 +1,9 @@
-ofono (1.12.bzr6890+15.04.20150224-0ubuntu1) UNRELEASED; urgency=medium
+ofono (1.12.bzr6890+15.04.20150317-0ubuntu1) vivid; urgency=medium
 
   [ Alfonso Sanchez-Beato ]
   * mtk.c: Fix Set3g FlightMode regression on krillin (LP: #1430700 )
 
- -- CI Train Bot <ci-train-bot@canonical.com>  Mon, 16 Mar 2015 19:59:36 -0400
+ -- CI Train Bot <ci-train-bot@canonical.com>  Tue, 17 Mar 2015 11:26:04 +0000
 
 ofono (1.12.bzr6888+15.04.20150224-0ubuntu1) vivid; urgency=medium
 
