@@ -1,3 +1,22 @@
+ofono (1.12.bzr6892+15.04.20150401-0ubuntu1) UNRELEASED; urgency=medium
+
+  [ Alfonso Sanchez-Beato ]
+  * ubuntu-apndb.c, src/common.c, test-common.c: provision IA APNs
+    LTE modems may require a new IA APN for non-GPRS operation,
+    this change allows a new IA APN type to be provisioned along
+    with Internet and MMS APNs.
+  * gril/grilunsol.c: LTE signal strength fix (LP: #1433867)
+  * ubuntu-apndb.c: load APNS w/out explict type (LP: #1437200)
+  * mtkodem, plugins/mtk.c, unit/tesk-mtkunsol.c: Dynamic MTK firwmare switching
+    This change causes the firmware on specific MTK-based phone to be
+    dynamically switched/reset based on SIM type and roaming conditions.
+  * include, plugins/mtk.c, src/modem.c, gprs.c: set data for just one slot (LP: #1413672)
+    Make sure ConnectionManager.Powered property is set for only one slot in
+    case the modem is of type dual SIM stand-by.
+  * doc, gprs: add 'Preferred' property to GPRS contexts (LP: #1361864)
+
+ -- CI Train Bot <ci-train-bot@canonical.com>  Wed, 01 Apr 2015 11:54:49 -0400
+
 ofono (1.12.bzr6890+15.04.20150317-0ubuntu1) vivid; urgency=medium
 
   [ Alfonso Sanchez-Beato ]

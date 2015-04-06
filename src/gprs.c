@@ -124,6 +124,7 @@ struct ofono_gprs_context {
 struct pri_context {
 	ofono_bool_t active;
 	enum ofono_gprs_context_type type;
+	gboolean preferred;
 	char name[MAX_CONTEXT_NAME_LENGTH + 1];
 	char message_proxy[MAX_MESSAGE_PROXY_LENGTH + 1];
 	char message_center[MAX_MESSAGE_CENTER_LENGTH + 1];
@@ -758,7 +759,7 @@ static void append_context_properties(struct pri_context *ctx,
 	const char *type = gprs_context_type_to_string(ctx->type);
 	const char *proto = gprs_proto_to_string(ctx->context.proto);
 	const char *name = ctx->name;
-	dbus_bool_t value;
+	dbus_bool_t value, preferred;
 	const char *strvalue;
 	struct context_settings *settings;
 
@@ -766,6 +767,9 @@ static void append_context_properties(struct pri_context *ctx,
 
 	value = ctx->active;
 	ofono_dbus_dict_append(dict, "Active", DBUS_TYPE_BOOLEAN, &value);
+
+	preferred = ctx->preferred;
+	ofono_dbus_dict_append(dict, "Preferred", DBUS_TYPE_BOOLEAN, &preferred);
 
 	ofono_dbus_dict_append(dict, "Type", DBUS_TYPE_STRING, &type);
 
@@ -890,6 +894,33 @@ static void pri_deactivate_callback(const struct ofono_error *error, void *data)
 	ofono_dbus_signal_property_changed(conn, ctx->path,
 					OFONO_CONNECTION_CONTEXT_INTERFACE,
 					"Active", DBUS_TYPE_BOOLEAN, &value);
+}
+
+static DBusMessage *pri_set_preferred(struct pri_context *ctx,
+					DBusConnection *conn,
+					DBusMessage *msg, gboolean preferred)
+{
+	GKeyFile *settings = ctx->gprs->settings;
+
+	if (ctx->preferred == preferred)
+		return dbus_message_new_method_return(msg);
+
+	ctx->preferred = preferred;
+
+	if (settings) {
+		g_key_file_set_boolean(settings, ctx->key, "Preferred",
+								preferred);
+		storage_sync(ctx->gprs->imsi, SETTINGS_STORE, settings);
+	}
+
+	g_dbus_send_reply(conn, msg, DBUS_TYPE_INVALID);
+
+	ofono_dbus_signal_property_changed(conn, ctx->path,
+					OFONO_CONNECTION_CONTEXT_INTERFACE,
+					"Preferred", DBUS_TYPE_BOOLEAN,
+					&preferred);
+
+	return NULL;
 }
 
 static DBusMessage *pri_set_apn(struct pri_context *ctx, DBusConnection *conn,
@@ -1188,6 +1219,15 @@ static DBusMessage *pri_set_property(DBusConnection *conn,
 						pri_deactivate_callback, ctx);
 
 		return NULL;
+	}
+
+	if (!strcmp(property, "Preferred")) {
+		if (dbus_message_iter_get_arg_type(&var) != DBUS_TYPE_BOOLEAN)
+			return __ofono_error_invalid_args(msg);
+
+		dbus_message_iter_get_basic(&var, &value);
+
+		return pri_set_preferred(ctx, conn, msg, value);
 	}
 
 	/* All other properties are read-only when context is active */
@@ -1593,6 +1633,58 @@ static void netreg_status_changed(int status, int lac, int ci, int tech,
 	gprs_netreg_update(gprs);
 }
 
+static void notify_connection_powered(struct ofono_modem *modem, void *data)
+{
+	struct ofono_atom *atom;
+	struct ofono_gprs *gprs;
+	struct ofono_modem *modem_notif = data;
+	DBusConnection *conn;
+	const char *path = ofono_modem_get_path(modem);
+
+	if (strcmp(path, ofono_modem_get_path(modem_notif)) == 0)
+		return;
+
+	if (!ofono_modem_is_standby(modem))
+		return;
+
+	atom = __ofono_modem_find_atom(modem, OFONO_ATOM_TYPE_GPRS);
+	if (atom == NULL)
+		return;
+
+	gprs = __ofono_atom_get_data(atom);
+
+	if (gprs->driver->set_attached == NULL)
+		return;
+
+	if (gprs->powered == FALSE)
+		return;
+
+	gprs->powered = FALSE;
+
+	if (gprs->settings) {
+		g_key_file_set_integer(gprs->settings, SETTINGS_GROUP,
+					"Powered", gprs->powered);
+		storage_sync(gprs->imsi, SETTINGS_STORE, gprs->settings);
+	}
+
+	gprs_netreg_update(gprs);
+
+	conn = ofono_dbus_get_connection();
+	ofono_dbus_signal_property_changed(conn, path,
+					OFONO_CONNECTION_MANAGER_INTERFACE,
+					"Powered", DBUS_TYPE_BOOLEAN,
+					&gprs->powered);
+}
+
+static void notify_powered_change(struct ofono_gprs *gprs)
+{
+	if (gprs->powered) {
+		struct ofono_modem *modem = __ofono_atom_get_modem(gprs->atom);
+
+		__ofono_modem_foreach(notify_connection_powered, modem);
+	}
+}
+
 static DBusMessage *gprs_get_properties(DBusConnection *conn,
 					DBusMessage *msg, void *data)
 {
@@ -1709,6 +1801,8 @@ static DBusMessage *gprs_set_property(DBusConnection *conn,
 		}
 
 		gprs_netreg_update(gprs);
+
+		notify_powered_change(gprs);
 	} else {
 		return __ofono_error_invalid_args(msg);
 	}
@@ -1736,6 +1830,8 @@ static void write_context_settings(struct ofono_gprs *gprs,
 				gprs_context_type_to_string(context->type));
 	g_key_file_set_string(gprs->settings, context->key, "Protocol",
 				gprs_proto_to_string(context->context.proto));
+	g_key_file_set_boolean(gprs->settings, context->key, "Preferred",
+				context->preferred);
 
 	if (context->type == OFONO_GPRS_CONTEXT_TYPE_MMS ||
 		(context->message_center && strlen(context->message_center) > 0)) {
@@ -2690,6 +2786,7 @@ static gboolean load_context(struct ofono_gprs *gprs, const char *group)
 	char *msgcenter = NULL;
 	gboolean ret = FALSE;
 	gboolean legacy = FALSE;
+	gboolean preferred;
 	struct pri_context *context;
 	enum ofono_gprs_context_type type;
 	enum ofono_gprs_proto proto;
@@ -2723,6 +2820,9 @@ static gboolean load_context(struct ofono_gprs *gprs, const char *group)
 
 	if (gprs_proto_from_string(protostr, &proto) == FALSE)
 		goto error;
+
+	preferred = g_key_file_get_boolean(gprs->settings, group,
+							"Preferred", NULL);
 
 	username = g_key_file_get_string(gprs->settings, group,
 						"Username", NULL);
@@ -2775,6 +2875,7 @@ static gboolean load_context(struct ofono_gprs *gprs, const char *group)
 	strcpy(context->context.password, password);
 	strcpy(context->context.apn, apn);
 	context->context.proto = proto;
+	context->preferred = preferred;
 
 	if (msgproxy != NULL)
 		strcpy(context->message_proxy, msgproxy);
@@ -2837,6 +2938,8 @@ static void gprs_load_settings(struct ofono_gprs *gprs, const char *imsi)
 		g_key_file_set_boolean(gprs->settings, SETTINGS_GROUP,
 					"Powered", gprs->powered);
 	}
+
+	notify_powered_change(gprs);
 
 	error = NULL;
 	gprs->roaming_allowed = g_key_file_get_boolean(gprs->settings,

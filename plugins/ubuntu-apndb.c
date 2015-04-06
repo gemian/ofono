@@ -191,10 +191,14 @@ static enum ofono_gprs_context_type determine_apn_type(const char *types)
 	 * - mms
 	 */
 
-	if (g_strcmp0(types, "mms") == 0)
-		return OFONO_GPRS_CONTEXT_TYPE_MMS;
-	else if (g_str_has_prefix(types, "default"))
+	/* Default apns can be used for mms and ia, mms can be used for ia */
+	if (types == NULL || g_strcmp0(types, "*") == 0
+					|| strstr(types, "default") != NULL)
 		return OFONO_GPRS_CONTEXT_TYPE_INTERNET;
+	else if (strstr(types, "mms") != NULL)
+		return OFONO_GPRS_CONTEXT_TYPE_MMS;
+	else if (strstr(types, "ia") != NULL)
+		return OFONO_GPRS_CONTEXT_TYPE_IA;
 	else
 		return OFONO_GPRS_CONTEXT_TYPE_ANY;
 }
@@ -338,12 +342,6 @@ static void toplevel_apndb_start(GMarkupParseContext *context,
 		return;
 	}
 
-	if (types == NULL) {
-		ofono_error("%s: apn for %s missing type attribute", __func__,
-				carrier);
-		return;
-	}
-
 	if (protocol != NULL) {
 		if (g_strcmp0(protocol, "IP") == 0) {
 			proto = OFONO_GPRS_PROTO_IP;
@@ -401,7 +399,8 @@ static void toplevel_apndb_start(GMarkupParseContext *context,
 
 	if (type == OFONO_GPRS_CONTEXT_TYPE_ANY ||
 		(type == OFONO_GPRS_CONTEXT_TYPE_MMS && mmscenter == NULL)) {
-		DBG("Skipping %s context; types: %s", apn, types);
+		DBG("Skipping %s context; types: %s",
+					apn, types ? types : "(null)");
 		return;
 	}
 
