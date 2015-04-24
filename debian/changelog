@@ -1,4 +1,4 @@
-ofono (1.12.bzr6894+15.04.20150424-0ubuntu1) UNRELEASED; urgency=medium
+ofono (1.12.bzr6894+15.04.20150424.1-0ubuntu1) vivid; urgency=medium
 
   [ Tony Espy ]
   * rilmodem/gprs-context.c: notify if call-list is empty (LP: #1435328)
@@ -7,7 +7,7 @@ ofono (1.12.bzr6894+15.04.20150424-0ubuntu1) UNRELEASED; urgency=medium
   * test/create-ia-context: new test script to create IA contexts
   * rilmodem/voicecall.c: drop call if radio is not available (LP: #1445580)
 
- -- Alfonso Sanchez-Beato (email Canonical) <alfonso.sanchez-beato@canonical.com>  Fri, 24 Apr 2015 11:19:08 +0200
+ -- CI Train Bot <ci-train-bot@canonical.com>  Fri, 24 Apr 2015 10:18:19 +0000
 
 ofono (1.12.bzr6892+15.04.20150407-0ubuntu1) vivid; urgency=medium
 
