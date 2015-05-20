@@ -1,3 +1,33 @@
+ofono (1.12.bzr6896+15.04.20150520-0ubuntu2) UNRELEASED; urgency=medium
+
+  [ Ratchanan Srirattanamet ]
+  * build, gril, rilmodem, qcommsimmodem, plugins/qcom-msim.c: add
+    support for LG L90 Dual which uses a Qualcomm dual-SIM modem (LP: #1427788)
+
+  [ Alfonso Sanchez-Beato ]
+  * src/gprs.c: support for 'ResetContexts' (LP: #1338758)
+    Adds a new ConnectionManager 'ResetContexts' DBus method
+    which deletes all existing gprs contexts and forces
+    re-provisioning to occur.
+  * plugins/ubuntu-apndb.c: ignore 'ipv6' protocol
+    This change causes APNs with an 'ipv6' protocol value
+    to instead be provisioned with 'ip', forcing IPv4 to
+    be used.
+
+  [ Jonas Drange ]
+  * doc/connman-api.txt: add metion of 'ia' gprs context type
+
+  [ Tony Espy ]
+  * test/set-context-property: add 'Preferred' support (LP: #1454756, #1454751)
+    This change adds support for the 'Preferred' ( and 'Active')
+    properties which both need to be DBus variant wrapped booleans.
+    Also added support for multi-SIM which was lacking from this script.
+  * test/list-modems: add privacy support (LP: #1438715)
+    Obfuscate any properties which can be tied to the end-user
+    ( eg. SubscriberNumbers, SubscriberIdentity, ... ).
+
+ -- CI Train Bot <ci-train-bot@canonical.com>  Wed, 20 May 2015 11:59:13 -0400
+
 ofono (1.12.bzr6894+15.04.20150424.1-0ubuntu1) vivid; urgency=medium
 
   [ Tony Espy ]
@@ -12,6 +42,8 @@ ofono (1.12.bzr6894+15.04.20150424.1-0ubuntu1) vivid; urgency=medium
 ofono (1.12.bzr6892+15.04.20150407-0ubuntu1) vivid; urgency=medium
 
   [ Alfonso Sanchez-Beato ]
+  * rilmodem/gprs.c: dynamically set authtype based on credentials (LP: #1435784)
+  * src/common.c: allow empty APNs when provisioning
   * ubuntu-apndb.c, src/common.c, test-common.c: provision IA APNs
     LTE modems may require a new IA APN for non-GPRS operation,
     this change allows a new IA APN type to be provisioned along

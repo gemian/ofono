@@ -4,6 +4,7 @@
  *
  *  Copyright (C) 2008-2011  Intel Corporation. All rights reserved.
  *  Copyright (C) 2012-2014  Canonical Ltd.
+ *  Copyright (C) 2015 Ratchanan Srirattanamet.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2 as
@@ -1073,6 +1074,28 @@ void g_ril_request_oem_hook_raw(GRil *gril, const void *payload, size_t length,
 	g_free(hex_dump);
 }
 
+void g_ril_request_oem_hook_strings(GRil *gril, const char **strs, int num_str,
+							struct parcel *rilp)
+{
+	int i;
+
+	parcel_init(rilp);
+	parcel_w_int32(rilp, num_str);
+
+	g_ril_append_print_buf(gril, "(");
+
+	for (i = 0; i < num_str; ++i) {
+		parcel_w_string(rilp, strs[i]);
+
+		if (i == num_str - 1)
+			g_ril_append_print_buf(gril, "%s%s)",
+							print_buf, strs[i]);
+		else
+			g_ril_append_print_buf(gril, "%s%s, ",
+							print_buf, strs[i]);
+	}
+}
+
 void g_ril_request_set_initial_attach_apn(GRil *gril, const char *apn,
 						int proto,
 						const char *user,
@@ -1104,4 +1127,25 @@ void g_ril_request_set_initial_attach_apn(GRil *gril, const char *apn,
 	} else {
 		g_ril_append_print_buf(gril, "%s)", print_buf);
 	}
+}
+
+void g_ril_request_set_uicc_subscription(GRil *gril, int slot_id,
+					int app_index,
+					int sub_id,
+					int sub_status,
+					struct parcel *rilp)
+{
+	parcel_init(rilp);
+
+	parcel_w_int32(rilp, slot_id);
+	parcel_w_int32(rilp, app_index);
+	parcel_w_int32(rilp, sub_id);
+	parcel_w_int32(rilp, sub_status);
+
+	g_ril_append_print_buf(gril, "(%d, %d, %d, %d(%s))",
+				slot_id,
+				app_index,
+				sub_id,
+				sub_status,
+				sub_status ? "ACTIVATE" : "DEACTIVATE");
 }
