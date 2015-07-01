@@ -1,4 +1,4 @@
-ofono (1.12.bzr6899+15.04.20150701-0ubuntu1) UNRELEASED; urgency=medium
+ofono (1.12.bzr6900+15.04.20150701-0ubuntu1) UNRELEASED; urgency=medium
 
   [Tony Espy]
   * test/rilmodem/sim: fix testing scripts for arale
