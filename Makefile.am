@@ -19,7 +19,8 @@ pkginclude_HEADERS = include/log.h include/plugin.h include/history.h \
 			include/cdma-connman.h include/gnss.h \
 			include/private-network.h include/cdma-netreg.h \
 			include/cdma-provision.h include/handsfree.h \
-			include/sim-mnclength.h include/spn-table.h
+			include/sim-mnclength.h include/spn-table.h \
+			include/dns-client.h
 
 nodist_pkginclude_HEADERS = include/version.h
 
@@ -172,6 +173,10 @@ builtin_sources += drivers/rilmodem/rilmodem.h \
 			drivers/rilmodem/radio-settings.c \
 			drivers/rilmodem/call-barring.c \
 			drivers/rilmodem/phonebook.c
+
+builtin_modules += qcommsimmodem
+builtin_sources += drivers/qcommsimmodem/qcom_msim_modem.c \
+			drivers/qcommsimmodem/radio-settings.c
 endif
 
 if ISIMODEM
@@ -530,6 +535,14 @@ builtin_modules += mnclength
 builtin_sources += plugins/mnclength.c
 endif
 
+if CARES
+builtin_modules += c_ares_dns_client
+builtin_sources += plugins/c-ares-dns-client.c
+
+builtin_cflags += @CARES_CFLAGS@
+builtin_libadd += @CARES_LIBS@
+endif
+
 if MAINTAINER_MODE
 builtin_modules += example_history
 builtin_sources += examples/history.c
@@ -585,7 +598,8 @@ src_ofonod_SOURCES = $(gdbus_sources) $(builtin_sources) src/ofono.ver \
 			src/cdma-smsutil.h src/cdma-smsutil.c \
 			src/cdma-sms.c src/private-network.c src/cdma-netreg.c \
 			src/cdma-provision.c src/handsfree.c \
-			src/sim-mnclength.c src/spn-table.c
+			src/sim-mnclength.c src/spn-table.c \
+			src/dns-client.c
 
 src_ofonod_LDADD = $(builtin_libadd) @GLIB_LIBS@ @DBUS_LIBS@ -ldl
 

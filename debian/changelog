@@ -1,3 +1,23 @@
+ofono (1.12.bzr6899+15.04.20150701-0ubuntu1) UNRELEASED; urgency=medium
+
+  [Tony Espy]
+  * test/rilmodem/sim: fix testing scripts for arale
+  * test: reverse meaning of list-modems -p
+
+  [ Alfonso Sanchez-Beato ]
+  * gril: cleanup traces
+  * src/gprs.c: set preferred for the used IA APN
+  * rilmodem, mtkmodem, plugins/ril.c, plugins/mtk.c: retry when a
+    context deactivation request has finished with an error
+  * build, include, plugins/c-ares-dns-client.c, src/dns-client.c,
+    src/gprs.c: resolve MMS proxy/MMSC host name (LP: #1417976)
+
+  [ Ratchanan Srirattanamet ]
+  * build, rilmodem, qcommsimmodem, plugins/ril.c,
+    src/radio-settings.c: add multi-sim support for qcommsimmodem
+
+ -- Alfonso Sanchez-Beato (email Canonical) <alfonso.sanchez-beato@canonical.com>  Wed, 01 Jul 2015 08:40:36 +0200
+
 ofono (1.12.bzr6896+15.04.20150521-0ubuntu1) vivid; urgency=medium
 
   [ Ratchanan Srirattanamet ]
