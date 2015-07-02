@@ -1,14 +1,15 @@
-ofono (1.12.bzr6900+15.04.20150701-0ubuntu1) UNRELEASED; urgency=medium
+ofono (1.12.bzr6898+15.04.20150701-0ubuntu1) UNRELEASED; urgency=medium
 
   [Tony Espy]
-  * test/rilmodem/sim: fix testing scripts for arale
-  * test: reverse meaning of list-modems -p
+  * test/rilmodem/sim: fix testing scripts for arale (LP: #1457775)
+  * test: reverse meaning of list-modems -p (LP: #1438715)
 
   [ Alfonso Sanchez-Beato ]
   * gril: cleanup traces
-  * src/gprs.c: set preferred for the used IA APN
+  * src/gprs.c: set preferred for the used IA APN (LP: #1361864)
   * rilmodem, mtkmodem, plugins/ril.c, plugins/mtk.c: retry when a
     context deactivation request has finished with an error
+    (LP: #1467191)
   * build, include, plugins/c-ares-dns-client.c, src/dns-client.c,
     src/gprs.c: resolve MMS proxy/MMSC host name (LP: #1417976)
 
