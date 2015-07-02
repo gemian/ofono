@@ -1,4 +1,4 @@
-ofono (1.12.bzr6900+15.04.20150701-0ubuntu1) UNRELEASED; urgency=medium
+ofono (1.12.bzr6900+15.10.20150702.3-0ubuntu1) wily; urgency=medium
 
   [Tony Espy]
   * test/rilmodem/sim: fix testing scripts for arale (LP: #1457775)
@@ -16,7 +16,7 @@ ofono (1.12.bzr6900+15.04.20150701-0ubuntu1) UNRELEASED; urgency=medium
   * build, rilmodem, qcommsimmodem, plugins/ril.c,
     src/radio-settings.c: add multi-sim support for qcommsimmodem
 
- -- Alfonso Sanchez-Beato (email Canonical) <alfonso.sanchez-beato@canonical.com>  Wed, 01 Jul 2015 08:40:36 +0200
+ -- CI Train Bot <ci-train-bot@canonical.com>  Thu, 02 Jul 2015 17:04:18 +0000
 
 ofono (1.12.bzr6896+15.04.20150521-0ubuntu1) vivid; urgency=medium
 
