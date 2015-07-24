@@ -1,11 +1,11 @@
-ofono (1.12.bzr6900+15.10.20150724-0ubuntu1) UNRELEASED; urgency=medium
+ofono (1.12.bzr6900+15.10.20150724.1-0ubuntu1) wily; urgency=medium
 
   [ Alfonso Sanchez-Beato ]
   * Fix writing of EF_MWIS SIM file (LP: #1469266)
   * Improvement in DNS lookups to avoid the need to set routes for the
     DNS servers, by disabling the rp filter.
 
- -- Alfonso Sanchez-Beato (email Canonical) <alfonso.sanchez-beato@canonical.com>  Fri, 24 Jul 2015 09:29:32 +0200
+ -- CI Train Bot <ci-train-bot@canonical.com>  Fri, 24 Jul 2015 08:37:27 +0000
 
 ofono (1.12.bzr6900+15.10.20150702.3-0ubuntu1) wily; urgency=medium
 
