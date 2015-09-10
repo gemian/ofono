@@ -12,9 +12,6 @@ CFLAGS += -Wall -Werror -Wextra \
 %:
 	dh $@ --parallel --with=autoreconf,systemd
 
-override_dh_auto_configure:
-	dh_auto_configure -- --enable-bluetooth --enable-dundee
-
 override_dh_installinit:
 	dh_installinit --no-restart-on-upgrade
 
