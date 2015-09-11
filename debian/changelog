@@ -1,9 +1,12 @@
-ofono (1.16.bzr6902+15.10.20150910-0ubuntu1) UNRELEASED; urgency=medium
+ofono (1.16.bzr6902+15.10.20150911-0ubuntu1) wily; urgency=medium
 
   [ Alfonso Sanchez-Beato ]
   * New upstream release 1.16; Bluetooth disabled in prep for Bluez5.
 
- -- Tony Espy <espy@canonical.com>  Thu, 10 Sep 2015 10:37:35 -0400
+  [ CI Train Bot ]
+  * New rebuild forced.
+
+ -- Tony Espy <ci-train-bot@canonical.com>  Fri, 11 Sep 2015 13:56:31 +0000
 
 ofono (1.12.bzr6900+15.10.20150724.1-0ubuntu1) wily; urgency=medium
 
