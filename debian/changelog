@@ -1,3 +1,13 @@
+ofono (1.17.bzr6904+15.10.20150928-0ubuntu1) UNRELEASED; urgency=medium
+
+  * Update to upstream release 1.17
+  * Do not assert when the radio is unavailable (LP: #1490991)
+  * Fix crash when importing phonebook (LP: #1486004)
+  * Check only destination port when receiving push (LP: #1490673)
+  * Fix crash when retrying to close context (LP: #1492483)
+
+ -- Alfonso Sanchez-Beato (email Canonical) <alfonso.sanchez-beato@canonical.com>  Mon, 28 Sep 2015 10:02:42 +0200
+
 ofono (1.16.bzr6902+15.10.20150911-0ubuntu1) wily; urgency=medium
 
   [ Alfonso Sanchez-Beato ]
