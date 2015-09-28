@@ -30,7 +30,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <syslog.h>
+#ifdef __GLIBC__
 #include <execinfo.h>
+#endif
 #include <dlfcn.h>
 
 #include "ofono.h"
@@ -113,6 +115,7 @@ void ofono_debug(const char *format, ...)
 	va_end(ap);
 }
 
+#ifdef __GLIBC__
 static void print_backtrace(unsigned int offset) __attribute__ ((used));
 
 static void print_backtrace(unsigned int offset)
@@ -216,6 +219,7 @@ static void print_backtrace(unsigned int offset)
 	close(outfd[1]);
 	close(infd[0]);
 }
+#endif
 
 extern struct ofono_debug_desc __start___debug[];
 extern struct ofono_debug_desc __stop___debug[];
