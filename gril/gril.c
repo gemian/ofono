@@ -150,7 +150,7 @@ static const char *unsol_request_to_string(struct ril_s *ril, int req)
 	if (str == NULL)
 		str = ril_unsol_request_to_string(req);
 
-	return str;	
+	return str;
 }
 
 static void ril_notify_node_destroy(gpointer data, gpointer user_data)
@@ -247,7 +247,6 @@ static gboolean ril_unregister_all(struct ril_s *ril,
  * see:
  *
  * https://wiki.mozilla.org/B2G/RIL
- *
  */
 static struct ril_request *ril_request_create(struct ril_s *ril,
 						guint gid,
@@ -426,48 +425,36 @@ static gboolean node_check_destroyed(struct ril_notify_node *node,
 
 static void handle_unsol_req(struct ril_s *p, struct ril_msg *message)
 {
-	GHashTableIter iter;
 	struct ril_notify *notify;
-	int req_key;
-	gpointer key, value;
-	GList *list_item;
-	struct ril_notify_node *node;
-	gboolean found = FALSE;
 
 	if (p->notify_list == NULL)
 		return;
 
 	p->in_notify = TRUE;
 
-	g_hash_table_iter_init(&iter, p->notify_list);
+	notify = g_hash_table_lookup(p->notify_list, &message->req);
+	if (notify != NULL) {
+		GSList *list_item;
 
-	while (g_hash_table_iter_next(&iter, &key, &value)) {
-		req_key = *((int *)key);
-		notify = value;
+		for (list_item = notify->nodes; list_item;
+				list_item = g_slist_next(list_item)) {
+			struct ril_notify_node *node = list_item->data;
 
-		if (req_key != message->req)
-			continue;
-
-		list_item = (GList *) notify->nodes;
-
-		while (list_item != NULL) {
-			node = list_item->data;
+			if (node->destroyed)
+				continue;
 
 			node->callback(message, node->user_data);
-			found = TRUE;
-			list_item = (GList *) g_slist_next(list_item);
 		}
-	}
-
-	/* Only log events not being listended for... */
-	if (!found)
+	} else {
+		/* Only log events not being listended for... */
 		DBG("RIL Event slot %d: %s\n",
 			p->slot, unsol_request_to_string(p, message->req));
+	}
 
 	p->in_notify = FALSE;
 
 	/* Now destroy nodes possibly removed by callbacks */
-	if (found)
+	if (notify != NULL)
 		ril_unregister_all(p, FALSE, node_check_destroyed,
 					GUINT_TO_POINTER(TRUE));
 }
@@ -562,7 +549,8 @@ static struct ril_msg *read_fixed_record(struct ril_s *p,
 	plen = ntohl(*((uint32_t *) (void *) bytes));
 	bytes += 4;
 
-	/* TODO: Verify that 4k is the max message size from rild.
+	/*
+	 * TODO: Verify that 4k is the max message size from rild.
 	 *
 	 * These conditions shouldn't happen.  If it does
 	 * there are three options:
@@ -573,15 +561,14 @@ static struct ril_msg *read_fixed_record(struct ril_s *p,
 	 */
 	g_assert(plen >= 8 && plen <= 4092);
 
-	/* If we don't have the whole fixed record in the ringbuffer
+	/*
+	 * If we don't have the whole fixed record in the ringbuffer
 	 * then return NULL & leave ringbuffer as is.
-	*/
+	 */
 
 	message_len = *len - 4;
 	if (message_len < plen)
 		return NULL;
-
-	/* FIXME: add check for message_len = 0? */
 
 	message = g_try_malloc(sizeof(struct ril_msg));
 	g_assert(message != NULL);
@@ -617,7 +604,8 @@ static void new_bytes(struct ring_buffer *rbuf, gpointer user_data)
 			return;
 		}
 
-		/* this function attempts to read the next full length
+		/*
+		 * This function attempts to read the next full length
 		 * fixed message from the stream.  if not all bytes are
 		 * available, it returns NULL.  otherwise it allocates
 		 * and returns a ril_message with the copied bytes, and
@@ -964,7 +952,7 @@ static void ril_cancel_group(struct ril_s *ril, guint group)
 				sent = TRUE;
 				break;
 			}
- 		}
+		 }
 
 		if (sent)
 			continue;

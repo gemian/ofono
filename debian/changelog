@@ -1,3 +1,19 @@
+ofono (1.17.bzr6906+16.04.20151118-0ubuntu1) UNRELEASED; urgency=medium
+
+  [ Simon Fels ]
+  * Improve HFP AG support for BlueZ 5.x
+  * Add support for HFP codec negotiation
+
+  [ Alfonso Sanchez-Beato ]
+  * Fix style issues found by checkpatch
+  * Address FIXME comments in gril
+  * Fix access to notify callbacks in gril
+
+  [ Tony Espy ]
+  * Add upower plugin to notify battery status to HFP headsets
+
+ -- Alfonso Sanchez-Beato (email Canonical) <alfonso.sanchez-beato@canonical.com>  Wed, 18 Nov 2015 09:09:08 +0200
+
 ofono (1.17.bzr6904+15.10.20150928.1-0ubuntu1) wily; urgency=medium
 
   [ Alfonso Sanchez-Beato (email Canonical) ]
