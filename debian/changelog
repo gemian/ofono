@@ -1,3 +1,18 @@
+ofono (1.17.bzr6908+16.04.20151127-0ubuntu1) UNRELEASED; urgency=medium
+
+  * Code drop from upstream
+
+  [ Tony Espy ]
+  * Add unit test test-rilmodem-cs
+
+  [ Simon Fels ]
+  * voicecall: don't dereference a supplied null value
+
+  [ Alfonso Sanchez-Beato ]
+  * Support handling incoming calls for HFP + multi-SIM
+
+ -- Alfonso Sanchez-Beato (email Canonical) <alfonso.sanchez-beato@canonical.com>  Fri, 27 Nov 2015 17:48:12 +0100
+
 ofono (1.17.bzr6906+16.04.20151119-0ubuntu1) xenial; urgency=medium
 
   [ Simon Fels ]
