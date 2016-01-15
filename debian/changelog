@@ -1,3 +1,13 @@
+ofono (1.17.bzr6910+16.04.20151203-0ubuntu1) UNRELEASED; urgency=medium
+
+  [ Simon Fels]
+
+  * voicecall: acquire wakelock when starting a HFP initated voicecall
+  * plugins: add android wakelock implementation
+  * src: add wakelock abstraction
+
+ -- Simon Fels <simon.fels@canonical.com>  Fri, 15 Jan 2016 17:00:56 +0100
+
 ofono (1.17.bzr6908+16.04.20151203-0ubuntu1) xenial; urgency=medium
 
   [ Tony Espy ]
