@@ -1,4 +1,4 @@
-ofono (1.17.bzr6912+16.04.20160314.1-0ubuntu1) UNRELEASED; urgency=medium
+ofono (1.17.bzr6912+16.04.20160314.3-0ubuntu1) xenial; urgency=medium
 
   [ Tony Espy ]
   * unit: new rilmodem tests for sms and call barring
@@ -19,7 +19,10 @@ ofono (1.17.bzr6912+16.04.20160314.1-0ubuntu1) UNRELEASED; urgency=medium
   * gril, rilmodem: set RIL version from CONNECTED event
   * unit: fix warning
 
- -- Alfonso Sanchez-Beato (email Canonical) <alfonso.sanchez-beato@canonical.com>  Mon, 14 Mar 2016 09:07:47 +0100
+  [ CI Train Bot ]
+  * No-change rebuild.
+
+ -- Alfonso Sanchez-Beato <alfonso.sanchez-beato@canonical.com>  Mon, 14 Mar 2016 09:11:26 +0000
 
 ofono (1.17.bzr6910+16.04.20160115.3-0ubuntu1) xenial; urgency=medium
 
