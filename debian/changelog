@@ -1,3 +1,26 @@
+ofono (1.17.bzr6912+16.04.20160314.1-0ubuntu1) UNRELEASED; urgency=medium
+
+  [ Tony Espy ]
+  * unit: new rilmodem tests for sms and call barring
+  * plugins: address upower plugin upstream comments
+  * unit: fix test-grilreply set_facility_lock test
+  * style fixes for wakelock support
+
+  [ Ratchanan Srirattanamet ]
+  * qcommsimmodem: fix setting 3G pref when one of the slots is empty
+
+  [ Alfonso Sanchez-Beato ]
+  * ril: set properly gril vendor
+  * support for system settings
+  * unit: make tests parallelizable
+
+  [ Vicamo Yang ]
+  * ril, gril: support for pro 5
+  * gril, rilmodem: set RIL version from CONNECTED event
+  * unit: fix warning
+
+ -- Alfonso Sanchez-Beato (email Canonical) <alfonso.sanchez-beato@canonical.com>  Mon, 14 Mar 2016 09:07:47 +0100
+
 ofono (1.17.bzr6910+16.04.20160115.3-0ubuntu1) xenial; urgency=medium
 
   [ Simon Fels ]
