@@ -14,7 +14,8 @@ Build-Depends: debhelper (>= 9),
                udev,
                libbluetooth-dev (>= 4.30),
                mobile-broadband-provider-info,
-               libc-ares-dev
+               libc-ares-dev,
+               libsystemd-dev
 Standards-Version: 3.9.4
 Homepage: http://www.ofono.org/
 # If you aren't a member of ~phablet-team but need to upload
