@@ -23,7 +23,8 @@ pkginclude_HEADERS = include/log.h include/plugin.h include/history.h \
 			include/cdma-provision.h include/handsfree.h \
 			include/handsfree-audio.h include/siri.h \
 			include/sim-mnclength.h include/spn-table.h \
-			include/dns-client.h include/wakelock.h
+			include/dns-client.h include/wakelock.h \
+			include/system-settings.h
 
 nodist_pkginclude_HEADERS = include/version.h
 
@@ -621,6 +622,14 @@ builtin_modules += android_wakelock
 builtin_sources += plugins/android-wakelock.c
 endif
 
+if ACCOUNTSSETTINGS
+builtin_modules += accounts_settings
+builtin_sources += plugins/accounts-settings.c
+
+builtin_cflags += @SYSTEMD_CFLAGS@
+builtin_libadd += @SYSTEMD_LIBS@
+endif
+
 sbin_PROGRAMS = src/ofonod
 
 src_ofonod_SOURCES = $(builtin_sources) src/ofono.ver \
@@ -650,7 +659,8 @@ src_ofonod_SOURCES = $(builtin_sources) src/ofono.ver \
 			src/handsfree-audio.c src/bluetooth.h \
 			src/hfp.h src/siri.c \
 			src/sim-mnclength.c src/spn-table.c \
-			src/dns-client.c src/wakelock.c
+			src/dns-client.c src/wakelock.c \
+			src/system-settings.c
 
 src_ofonod_LDADD = gdbus/libgdbus-internal.la $(builtin_libadd) \
 			@GLIB_LIBS@ @DBUS_LIBS@ -ldl
@@ -817,7 +827,9 @@ unit_tests = unit/test-common unit/test-util unit/test-idmap \
 				unit/test-mtkrequest \
 				unit/test-mtkreply \
 				unit/test-mtkunsol \
-				unit/test-rilmodem-cs
+				unit/test-rilmodem-cs \
+				unit/test-rilmodem-sms \
+				unit/test-rilmodem-cb
 
 noinst_PROGRAMS = $(unit_tests) \
 			unit/test-sms-root unit/test-mux unit/test-caif
@@ -913,13 +925,32 @@ unit_test_mnclength_SOURCES = unit/test-mnclength.c plugins/mnclength.c \
 unit_test_mnclength_LDADD = @GLIB_LIBS@ -ldl
 unit_objects += $(unit_test_mnclength_OBJECTS)
 
-unit_test_rilmodem_cs_SOURCES = unit/test-rilmodem-cs.c $(gril_sources) \
-			src/log.c src/common.c src/util.c \
-			drivers/rilmodem/call-settings.c \
-			src/simutil.c gatchat/ringbuffer.c
+test_rilmodem_sources = $(gril_sources) src/log.c src/common.c src/util.c \
+				gatchat/ringbuffer.h gatchat/ringbuffer.c \
+				unit/rilmodem-test-server.h \
+				unit/rilmodem-test-server.c \
+				src/simutil.c
+
+unit_test_rilmodem_cs_SOURCES = $(test_rilmodem_sources) \
+					unit/test-rilmodem-cs.c \
+					drivers/rilmodem/call-settings.c
 unit_test_rilmodem_cs_LDADD = gdbus/libgdbus-internal.la $(builtin_libadd) \
-			@GLIB_LIBS@ @DBUS_LIBS@ -ldl
+					@GLIB_LIBS@ @DBUS_LIBS@ -ldl
 unit_objects += $(unit_test_rilmodem_cs_OBJECTS)
+
+unit_test_rilmodem_sms_SOURCES = $(test_rilmodem_sources) \
+					unit/test-rilmodem-sms.c \
+					drivers/rilmodem/sms.c
+unit_test_rilmodem_sms_LDADD = gdbus/libgdbus-internal.la $(builtin_libadd) \
+					@GLIB_LIBS@ @DBUS_LIBS@ -ldl
+unit_objects += $(unit_test_rilmodem_sms_OBJECTS)
+
+unit_test_rilmodem_cb_SOURCES = $(test_rilmodem_sources) \
+					unit/test-rilmodem-cb.c \
+					drivers/rilmodem/call-barring.c
+unit_test_rilmodem_cb_LDADD = gdbus/libgdbus-internal.la $(builtin_libadd) \
+					@GLIB_LIBS@ @DBUS_LIBS@ -ldl
+unit_objects += $(unit_test_rilmodem_cb_OBJECTS)
 
 TESTS = $(unit_tests)
 

@@ -1420,7 +1420,7 @@ static const struct query_facility_lock_test
  * RIL_REQUEST_SET_FACILITY_LOCK reply with no parameters.
  */
 static const struct set_facility_lock_test reply_set_facility_lock_valid_1 = {
-	.retries = -1,
+	.retries = 0,
 	.msg = {
 		.buf = NULL,
 		.buf_len = 0,
@@ -1686,7 +1686,7 @@ static void test_reply_call_fail_cause_valid(gconstpointer data)
 
 	reason = g_ril_reply_parse_call_fail_cause(NULL, data);
 
-	g_assert(reason >= 0);
+	g_assert(reason == OFONO_DISCONNECT_REASON_REMOTE_HANGUP);
 }
 
 static void test_reply_get_mute_off(gconstpointer data)
