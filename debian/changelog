@@ -1,9 +1,13 @@
-ofono (1.17.bzr6914+16.04.20160413-0ubuntu1) UNRELEASED; urgency=medium
+ofono (1.17.bzr6914+16.04.20160413.1-0ubuntu1) xenial; urgency=medium
 
+  [ Alfonso Sanchez-Beato (email Canonical) ]
   * Make sure we detach from old contexts in all cases (LP: #1533508)
   * Refresh bearer always
 
- -- Alfonso Sanchez-Beato (email Canonical) <alfonso.sanchez-beato@canonical.com>  Wed, 13 Apr 2016 16:25:30 +0200
+  [ CI Train Bot ]
+  * No-change rebuild.
+
+ -- Alfonso Sanchez-Beato <alfonso.sanchez-beato@canonical.com>  Wed, 13 Apr 2016 14:43:54 +0000
 
 ofono (1.17.bzr6912+16.04.20160314.3-0ubuntu1) xenial; urgency=medium
 
