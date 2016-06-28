@@ -2,7 +2,7 @@
  *
  *  oFono - Open Source Telephony - RIL Modem Support
  *
- *  Copyright (C) 2015 Ratchanan Srirattanamet
+ *  Copyright (C) 2016  Canonical Ltd.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2 as
@@ -19,10 +19,10 @@
  *
  */
 
-#define QCOMMSIMMODEM "qcommsimmodem"
+#define MTK2MODEM "mtk2modem"
 
-extern void qcom_msim_radio_settings_init(void);
-extern void qcom_msim_radio_settings_exit(void);
+extern void mtk2_voicecall_init(void);
+extern void mtk2_voicecall_exit(void);
 
-extern void qcom_msim_gprs_init(void);
-extern void qcom_msim_gprs_exit(void);
+extern void mtk2_gprs_init(void);
+extern void mtk2_gprs_exit(void);

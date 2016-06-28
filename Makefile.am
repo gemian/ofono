@@ -135,6 +135,9 @@ builtin_sources += plugins/ril.c
 builtin_modules += mtk
 builtin_sources += plugins/mtk.c
 
+builtin_modules += mtk2
+builtin_sources += plugins/mtk2.c
+
 builtin_modules += infineon
 builtin_sources += plugins/infineon.c
 
@@ -160,6 +163,15 @@ builtin_sources += drivers/mtkmodem/mtkmodem.h \
 			drivers/mtkmodem/radio-settings.c \
 			drivers/mtkmodem/mtksettings.c
 
+builtin_modules += mtk2modem
+builtin_sources += drivers/mtk2modem/mtk2modem.h \
+			drivers/mtk2modem/mtk2modem.c \
+			drivers/mtk2modem/mtk2_constants.h \
+			drivers/mtk2modem/mtk2util.h \
+			drivers/mtk2modem/mtk2util.c \
+			drivers/mtk2modem/voicecall.c \
+			drivers/mtk2modem/gprs.c
+
 builtin_modules += rilmodem
 builtin_sources += drivers/rilmodem/rilmodem.h \
 			drivers/rilmodem/vendor.h \
@@ -183,7 +195,8 @@ builtin_sources += drivers/rilmodem/rilmodem.h \
 
 builtin_modules += qcommsimmodem
 builtin_sources += drivers/qcommsimmodem/qcom_msim_modem.c \
-			drivers/qcommsimmodem/radio-settings.c
+			drivers/qcommsimmodem/radio-settings.c \
+			drivers/qcommsimmodem/gprs.c
 endif
 
 if ISIMODEM
