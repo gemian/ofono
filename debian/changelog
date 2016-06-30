@@ -1,4 +1,4 @@
-ofono (1.17.bzr6917+16.10.20160630.1-0ubuntu1) UNRELEASED; urgency=medium
+ofono (1.17.bzr6918+16.10.20160630.1-0ubuntu1) UNRELEASED; urgency=medium
 
   [ Ratchanan Srirattanamet ]
   * qcommsimmodem: fix slot selection for cellular data
