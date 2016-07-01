@@ -1,8 +1,8 @@
 /*
  *
- *  oFono - Open Source Telephony - RIL Modem Support
+ *  MTK2 driver for ofono/rilmodem
  *
- *  Copyright (C) 2015 Ratchanan Srirattanamet
+ *  Copyright (C) 2016  Canonical Ltd.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2 as
@@ -19,10 +19,21 @@
  *
  */
 
-#define QCOMMSIMMODEM "qcommsimmodem"
+#ifndef MTK2UTIL_H
+#define MTK2UTIL_H
 
-extern void qcom_msim_radio_settings_init(void);
-extern void qcom_msim_radio_settings_exit(void);
+#include <ofono/types.h>
+#include <gril.h>
 
-extern void qcom_msim_gprs_init(void);
-extern void qcom_msim_gprs_exit(void);
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+const char *mtk2_request_id_to_string(int req);
+const char *mtk2_unsol_request_to_string(int req);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* MTK2UTIL_H */
