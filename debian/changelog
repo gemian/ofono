@@ -1,4 +1,4 @@
-ofono (1.17.bzr6918+16.10.20160630.1-0ubuntu1) UNRELEASED; urgency=medium
+ofono (1.17.bzr6919+16.10.20160701.1-0ubuntu1) UNRELEASED; urgency=medium
 
   [ Ratchanan Srirattanamet ]
   * qcommsimmodem: fix slot selection for cellular data
@@ -10,7 +10,10 @@ ofono (1.17.bzr6918+16.10.20160630.1-0ubuntu1) UNRELEASED; urgency=medium
   * Fix cellular data switch in turbo (LP: #1592258)
   * Fix ofono re-starts on boot in turbo (LP: #1580908)
 
- -- Alfonso Sanchez-Beato (email Canonical) <alfonso.sanchez-beato@canonical.com>  Tue, 28 Jun 2016 17:17:05 +0200
+  [ Rex Tsai ]
+  * voicecall: add emergency numbers required for China Market
+
+ -- Alfonso Sanchez-Beato (email Canonical) <alfonso.sanchez-beato@canonical.com>  Fri, 01 Jul 2016 17:17:05 +0200
 
 ofono (1.17.bzr6914+16.04.20160413.1-0ubuntu1) xenial; urgency=medium
 
