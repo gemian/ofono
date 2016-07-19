@@ -1,3 +1,21 @@
+ofono (1.17.bzr6919+16.10.20160719-0ubuntu1) UNRELEASED; urgency=medium
+
+  [ Alfonso Sanchez-Beato ]
+  * Add automatic SIM slot capability switching for midori:
+   * include: gprs: remove set ia
+   * gprs: remove calls to set_ia_apn
+   * gril: fix memory leak, print radio_caps event
+   * ril: create radio settings when onlining
+   * rilmodem: gprs: remove set_ia_apn
+   * rilmodem: radio-settings: enable switch slots caps
+   * qcommsimmodem: remote set_ia_apn
+   * qcommsimmodem: adapt to radio settings changes
+   * mtkmodem: adapt to radio settings changes
+   * mtkmodem: remove set_ia_apn
+   * mtk2modem: remove set_ia_apn
+
+ -- Tony Espy <espy@canonical.com>  Tue, 19 Jul 2016 10:29:20 -0400
+
 ofono (1.17.bzr6919+16.10.20160701.2-0ubuntu1) yakkety; urgency=medium
 
   [ Ratchanan Srirattanamet ]
