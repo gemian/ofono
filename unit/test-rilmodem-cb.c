@@ -577,7 +577,7 @@ int main(int argc, char **argv)
 					&testdata_query_invalid_3,
 					test_call_barring_func);
 	g_test_add_data_func("/testrilmodemcallbarring/query/invalid/4",
-					&testdata_query_invalid_3,
+					&testdata_query_invalid_4,
 					test_call_barring_func);
 	g_test_add_data_func("/testrilmodemcallbarring/set/valid/1",
 					&testdata_set_valid_1,
