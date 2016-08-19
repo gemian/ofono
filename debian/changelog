@@ -1,3 +1,9 @@
+ofono (1.17.bzr6921+16.10.20160819.1-0ubuntu1) UNRELEASED; urgency=medium
+
+  * Fix network name parsing for turbo (LP: #1598181)
+
+ -- Alfonso Sanchez-Beato (email Canonical) <alfonso.sanchez-beato@canonical.com>  Fri, 19 Aug 2016 08:46:21 +0200
+
 ofono (1.17.bzr6919+16.10.20160719.1-0ubuntu1) yakkety; urgency=medium
 
   [ Alfonso Sanchez-Beato ]
