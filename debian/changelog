@@ -1,3 +1,13 @@
+ofono (1.17.0+ubports1) vivid; urgency=medium
+
+  [peat-psuwit]
+  * rilmodem: make SET_UICC_SUBSCRIPTION works on newer devices
+
+  [kelmes]
+  * Fallback to 2G only
+
+ -- Marius Gripsgard <marius@ubports.com>  Fri, 24 Nov 2017 01:05:16 +0100
+
 ofono (1.17.bzr6921+16.10.20160819.6-0ubuntu1) yakkety; urgency=medium
 
   [ Alfonso Sanchez-Beato (email Canonical) ]
