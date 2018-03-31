@@ -1,9 +1,9 @@
 Source: ofono
 Section: admin
 Priority: optional
-Maintainer: Ubuntu Developers <ubuntu-devel-discuss@lists.ubuntu.com>
+Maintainer: TheKit <nekit1000@gmail.com>
 XSBC-Original-Maintainer: Debian Telepathy maintainers <pkg-telepathy-maintainers@lists.alioth.debian.org>
-Uploaders: Jonny Lamb <jonny@debian.org>, Hector Oron <zumbi@debian.org>, Konstantinos Margaritis <markos@debian.org>
+Uploaders: Adam Boardman <adamboardman@gmail.com>
 Build-Depends: debhelper (>= 9),
                dh-autoreconf,
                dh-systemd,
@@ -18,11 +18,8 @@ Build-Depends: debhelper (>= 9),
                libsystemd-dev
 Standards-Version: 3.9.4
 Homepage: http://www.ofono.org/
-# If you aren't a member of ~phablet-team but need to upload
-# packaging changes, just go ahead. ~phablet-team will notice
-# and sync up the code again.
-Vcs-Bzr: https://code.launchpad.net/~phablet-team/ofono/ubuntu
-Vcs-Browser: http://bazaar.launchpad.net/~phablet-team/ofono/ubuntu
+Vcs-Git: https://github.com/gemian/ofono.git
+Vcs-Browser: https://github.com/gemian/ofono
 
 Package: ofono
 Architecture: any

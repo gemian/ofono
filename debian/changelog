@@ -1,3 +1,12 @@
+ofono (1.18.1+gemian1) stretch; urgency=medium
+
+  * Branched for Gemian
+  
+  [TheKit]
+  * Fixed RIL daemon crash on Gemini PDA
+
+ -- Adam Boardman <adamboardman@gmail.com>  Sat, 31 Mar 2018 17:41:48 +0100
+
 ofono (1.18.0+ubports1) vivid; urgency=medium
 
   [peat-psuwit]
