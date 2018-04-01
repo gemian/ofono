@@ -5,6 +5,8 @@ Requires=dbus.service
 After=dbus.service
 
 [Service]
+Environment="OFONO_RIL_DEVICE=mtk2"
+Environment="OFONO_RIL_NUM_SIM_SLOTS=1"
 Restart=on-failure
 BusName=org.ofono
 ExecStart=/usr/sbin/ofonod -P ril --nodetach

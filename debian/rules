@@ -10,7 +10,8 @@ CFLAGS += -Wall -Werror -Wextra \
 	-DG_DISABLE_DEPRECATED
 
 CONFIGURE_FLAGS := \
-	--enable-android-wakelock
+	--enable-android-wakelock \
+        --with-systemdunitdir=/lib/systemd/system
 
 %:
 	dh $@ --parallel --with=autoreconf,systemd
