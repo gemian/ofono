@@ -60,6 +60,10 @@ struct unsol_call_indication *g_mtk_unsol_parse_incoming_call_indication(
 	numstr = parcel_r_int32(&rilp);
 	if (numstr < 5) {
 		ofono_error("%s: wrong array size (%d)", __func__, numstr);
+		if (numstr == 4) {
+			ofono_error("{%s,%s,%s,%s}", parcel_r_string(&rilp), parcel_r_string(&rilp), parcel_r_string(&rilp),
+						parcel_r_string(&rilp));
+		}
 		goto error;
 	}
 

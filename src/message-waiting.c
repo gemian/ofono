@@ -624,8 +624,7 @@ static void mw_mbi_read_cb(int ok, int total_length, int record,
 	int i, err;
 
 	if (!ok || record_length < 4) {
-		ofono_error("Unable to read mailbox identifies "
-				"from SIM");
+		ofono_error("Unable to read mailbox identifies from SIM, ok: %d, rl: %d", ok, record_length);
 
 		mw->efmbdn_length = 0;
 		mw->mbdn_not_provided = TRUE;
