@@ -61,9 +61,19 @@ struct unsol_call_indication *g_mtk_unsol_parse_incoming_call_indication(
 	if (numstr < 5) {
 		ofono_error("%s: wrong array size (%d)", __func__, numstr);
 		if (numstr == 4) {
-			ofono_error("{%s,%s,%s,%s}", parcel_r_string(&rilp), parcel_r_string(&rilp), parcel_r_string(&rilp),
-						parcel_r_string(&rilp));
-		}
+            call_id = parcel_r_string(&rilp);
+            ofono_error("call_id {%s}", PRINTABLE_STR(call_id));
+            phone = parcel_r_string(&rilp);
+            ofono_error("phone {%s}", PRINTABLE_STR(phone));
+            address_type = parcel_r_string(&rilp);
+            ofono_error("address_type {%s}", PRINTABLE_STR(address_type));
+            call_mode = parcel_r_string(&rilp);
+            ofono_error("call_mode {%s}", PRINTABLE_STR(call_mode));
+            g_free(call_id);
+            g_free(phone);
+            g_free(address_type);
+            g_free(call_mode);
+        }
 		goto error;
 	}
 

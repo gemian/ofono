@@ -687,8 +687,8 @@ static void sim_fs_op_info_cb(const struct ofono_error *error, int length,
 					access, file_status);
 
 	if (structure != op->structure) {
-		ofono_error("Requested file structure differs from SIM: %x",
-				op->id);
+		ofono_error("Requested file structure differs from SIM: id:%x, s: %d, o->s:%d",
+				op->id, structure, op->structure);
 		sim_fs_op_error(fs);
 		return;
 	}
