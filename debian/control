@@ -15,7 +15,9 @@ Build-Depends: debhelper (>= 9),
                libbluetooth-dev (>= 4.30),
                mobile-broadband-provider-info,
                libc-ares-dev,
-               libsystemd-dev
+               libsystemd-dev,
+               libglibutil-dev,
+               libgrilio-dev
 Standards-Version: 4.1.1
 Homepage: http://www.ofono.org/
 Vcs-Git: https://github.com/gemian/ofono.git
