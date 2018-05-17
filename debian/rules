@@ -1,6 +1,6 @@
 #!/usr/bin/make -f
 
-CFLAGS += -Wall -Werror -Wextra \
+CFLAGS += -Wall \
 	-Wno-unused-parameter \
 	-Wno-missing-field-initializers \
 	-Wdeclaration-after-statement \
