@@ -47,10 +47,11 @@ static char *battery_device_path;
 
 static void emulator_battery_cb(struct ofono_atom *atom, void *data)
 {
+	struct ofono_emulator *em = __ofono_atom_get_data(atom);
 	int val = GPOINTER_TO_INT(data);
 
 	DBG("calling set_indicator: %d", val);
-	ofono_emulator_set_indicator(atom, OFONO_EMULATOR_IND_BATTERY, val);
+	ofono_emulator_set_indicator(em, OFONO_EMULATOR_IND_BATTERY, val);
 }
 
 static void update_modem_battery_indicator(struct ofono_modem *modem,
@@ -183,9 +184,11 @@ static void emulator_hfp_watch(struct ofono_atom *atom,
 				void *data)
 {
 	if (cond == OFONO_ATOM_WATCH_CONDITION_REGISTERED) {
+		struct ofono_emulator *em = __ofono_atom_get_data(atom);
+
 		DBG("REGISTERED; calling set_indicator: %d", last_battery_level);
 
-		ofono_emulator_set_indicator(atom, OFONO_EMULATOR_IND_BATTERY,
+		ofono_emulator_set_indicator(em, OFONO_EMULATOR_IND_BATTERY,
 							last_battery_level);
 		return;
 	}
@@ -204,6 +207,7 @@ static void modemwatch(struct ofono_modem *modem, gboolean added, void *user)
 		__ofono_modem_add_atom_watch(modem,
 					OFONO_ATOM_TYPE_EMULATOR_HFP,
 					emulator_hfp_watch, NULL, NULL);
+
 }
 
 static void call_modemwatch(struct ofono_modem *modem, void *user)
@@ -359,6 +363,7 @@ static void upower_exit(void)
 
 	if (battery_device_path)
 		g_free(battery_device_path);
+
 }
 
 OFONO_PLUGIN_DEFINE(upower, "upower battery monitor", VERSION,

@@ -33,8 +33,6 @@ extern "C" {
 #include "ril_constants.h"
 #include "drivers/rilmodem/vendor.h"
 
-#define RIL_MAX_NUM_ACTIVE_DATA_CALLS 2
-
 struct _GRil;
 
 typedef struct _GRil GRil;
@@ -46,7 +44,7 @@ typedef struct _GRil GRil;
  */
 struct ril_msg {
 	gchar *buf;
-	gsize buf_len;
+	unsigned int buf_len;
 	gboolean unsolicited;
 	int req;
 	int serial_no;
@@ -77,7 +75,8 @@ extern char print_buf[];
 #define g_ril_print_request(gril, token, req)				\
 	G_RIL_TRACE(gril, "[%d,%04d]> %s %s",				\
 		g_ril_get_slot(gril), token,				\
-		g_ril_request_id_to_string(gril, req), print_buf)
+		g_ril_request_id_to_string(gril, req), print_buf);	\
+		print_buf[0] = '\0';
 #define g_ril_print_request_no_args(gril, token, req)			\
 	G_RIL_TRACE(gril, "[%d,%04d]> %s",				\
 			g_ril_get_slot(gril), token,			\
@@ -87,7 +86,8 @@ extern char print_buf[];
 			g_ril_get_slot(gril),				\
 			message->serial_no,				\
 			g_ril_request_id_to_string(gril, message->req), \
-							print_buf)
+							print_buf);	\
+			print_buf[0] = '\0';
 #define g_ril_print_response_no_args(gril, message)			\
 	G_RIL_TRACE(gril, "[%d,%04d]< %s",				\
 		g_ril_get_slot(gril), message->serial_no,		\
@@ -111,6 +111,8 @@ extern char print_buf[];
 void g_ril_init_parcel(const struct ril_msg *message, struct parcel *rilp);
 
 GRil *g_ril_new(const char *sock_path, enum ofono_ril_vendor vendor);
+GRil *g_ril_new_with_ucred(const char *sock_path, enum ofono_ril_vendor vendor,
+				unsigned int uid, unsigned int gid);
 
 GIOChannel *g_ril_get_channel(GRil *ril);
 GRilIO *g_ril_get_io(GRil *ril);
@@ -128,9 +130,6 @@ gboolean g_ril_set_trace(GRil *ril, gboolean trace);
 
 int g_ril_get_slot(GRil *ril);
 gboolean g_ril_set_slot(GRil *ril, int slot);
-
-int g_ril_get_version(GRil *ril);
-gboolean g_ril_set_version(GRil *ril, int version);
 
 /*!
  * If the function is not NULL, then on every read/write from the GIOChannel

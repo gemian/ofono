@@ -3,6 +3,7 @@
  *  oFono - Open Source Telephony
  *
  *  Copyright (C) 2008-2011  Intel Corporation. All rights reserved.
+ *  Copyright (C) 2013-2016  Jolla Ltd.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2 as
@@ -37,6 +38,9 @@
 
 #include "ofono.h"
 
+ofono_log_hook_cb_t ofono_log_hook;
+static GString *ofono_debug_str;
+
 static const char *program_exec;
 static const char *program_path;
 
@@ -56,6 +60,12 @@ void ofono_info(const char *format, ...)
 	vsyslog(LOG_INFO, format, ap);
 
 	va_end(ap);
+
+	if (ofono_log_hook) {
+		va_start(ap, format);
+		ofono_log_hook(NULL, LOG_INFO, format, ap);
+		va_end(ap);
+	}
 }
 
 /**
@@ -74,6 +84,12 @@ void ofono_warn(const char *format, ...)
 	vsyslog(LOG_WARNING, format, ap);
 
 	va_end(ap);
+
+	if (ofono_log_hook) {
+		va_start(ap, format);
+		ofono_log_hook(NULL, LOG_WARNING, format, ap);
+		va_end(ap);
+	}
 }
 
 /**
@@ -92,6 +108,12 @@ void ofono_error(const char *format, ...)
 	vsyslog(LOG_ERR, format, ap);
 
 	va_end(ap);
+
+	if (ofono_log_hook) {
+		va_start(ap, format);
+		ofono_log_hook(NULL, LOG_ERR, format, ap);
+		va_end(ap);
+	}
 }
 
 /**
@@ -113,6 +135,37 @@ void ofono_debug(const char *format, ...)
 	vsyslog(LOG_DEBUG, format, ap);
 
 	va_end(ap);
+
+	if (ofono_log_hook) {
+		va_start(ap, format);
+		ofono_log_hook(NULL, LOG_DEBUG, format, ap);
+		va_end(ap);
+	}
+}
+
+void ofono_dbg(const struct ofono_debug_desc *desc, const char *format, ...)
+{
+	va_list ap;
+
+	if (!(desc->flags & OFONO_DEBUG_FLAG_PRINT))
+		return;
+
+	va_start(ap, format);
+
+	if (ofono_debug_str) {
+		g_string_vprintf(ofono_debug_str, format, ap);
+		syslog(LOG_DEBUG, "%s:%s", desc->file, ofono_debug_str->str);
+	} else {
+		vsyslog(LOG_DEBUG, format, ap);
+	}
+
+	va_end(ap);
+
+	if (ofono_log_hook) {
+		va_start(ap, format);
+		ofono_log_hook(desc, LOG_DEBUG, format, ap);
+		va_end(ap);
+	}
 }
 
 #ifdef __GLIBC__
@@ -192,6 +245,9 @@ static void print_backtrace(unsigned int offset)
 		buf[len] = '\0';
 
 		pos = strchr(buf, '\n');
+		if (!pos)
+			break;
+
 		*pos++ = '\0';
 
 		if (strcmp(buf, "??") == 0) {
@@ -287,19 +343,26 @@ void __ofono_log_enable(struct ofono_debug_desc *start,
 				file = NULL;
 		}
 
-		if (is_enabled(desc) == TRUE)
+		if (is_enabled(desc) &&
+				!(desc->flags & OFONO_DEBUG_FLAG_PRINT)) {
 			desc->flags |= OFONO_DEBUG_FLAG_PRINT;
+			if (desc->notify) {
+				desc->notify(desc);
+			}
+		}
 	}
 }
 
 int __ofono_log_init(const char *program, const char *debug,
-						ofono_bool_t detach)
+						ofono_bool_t detach,
+						ofono_bool_t backtrace)
 {
 	static char path[PATH_MAX];
 	int option = LOG_NDELAY | LOG_PID;
 
 	program_exec = program;
 	program_path = getcwd(path, sizeof(path));
+	ofono_debug_str = g_string_sized_new(127);
 
 	if (debug != NULL)
 		enabled = g_strsplit_set(debug, ":, ", 0);
@@ -310,7 +373,8 @@ int __ofono_log_init(const char *program, const char *debug,
 		option |= LOG_PERROR;
 
 #ifdef __GLIBC__
-	signal_setup(signal_handler);
+	if (backtrace == TRUE)
+		signal_setup(signal_handler);
 #endif
 
 	openlog(basename(program), option, LOG_DAEMON);
@@ -320,15 +384,18 @@ int __ofono_log_init(const char *program, const char *debug,
 	return 0;
 }
 
-void __ofono_log_cleanup(void)
+void __ofono_log_cleanup(ofono_bool_t backtrace)
 {
 	syslog(LOG_INFO, "Exit");
 
 	closelog();
 
 #ifdef __GLIBC__
-	signal_setup(SIG_DFL);
+	if (backtrace == TRUE)
+		signal_setup(SIG_DFL);
 #endif
 
 	g_strfreev(enabled);
+	g_string_free(ofono_debug_str, TRUE);
+	ofono_debug_str = NULL;
 }

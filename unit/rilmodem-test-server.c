@@ -24,11 +24,11 @@
 #endif
 
 #define _GNU_SOURCE
-#include <stdio.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
+#include <string.h>
 
 #include <ofono/types.h>
 
@@ -37,13 +37,11 @@
 #include "rilmodem-test-server.h"
 
 #define MAX_REQUEST_SIZE 4096
-#define RIL_SERVER_SOCK_PATH    "/tmp/unittestril"
 
 struct server_data {
 	int server_sk;
 	ConnectFunc connect_func;
 	GIOChannel *server_io;
-	char *sock_name;
 	const struct rilmodem_test_data *rtd;
 	void *user_data;
 };
@@ -160,8 +158,6 @@ void rilmodem_test_server_close(struct server_data *sd)
 {
 	g_assert(sd->server_sk);
 	close(sd->server_sk);
-	remove(sd->sock_name);
-	g_free(sd->sock_name);
 	g_free(sd);
 }
 
@@ -174,6 +170,7 @@ struct server_data *rilmodem_test_server_create(ConnectFunc connect,
 	int retval;
 	struct server_data *sd;
 
+
 	sd = g_new0(struct server_data, 1);
 
 	sd->connect_func = connect;
@@ -183,12 +180,9 @@ struct server_data *rilmodem_test_server_create(ConnectFunc connect,
 	sd->server_sk = socket(AF_UNIX, SOCK_STREAM, 0);
 	g_assert(sd->server_sk);
 
-	sd->sock_name =
-		g_strdup_printf(RIL_SERVER_SOCK_PATH"%u", (unsigned) getpid());
-
 	memset(&addr, 0, sizeof(addr));
 	addr.sun_family = AF_UNIX;
-	strncpy(addr.sun_path, sd->sock_name, sizeof(addr.sun_path) - 1);
+	strncpy(addr.sun_path, RIL_SERVER_SOCK_PATH, sizeof(addr.sun_path) - 1);
 
 	/* Unlink any existing socket for this session */
 	unlink(addr.sun_path);
@@ -229,9 +223,4 @@ void rilmodem_test_server_write(struct server_data *sd,
 	status = g_io_channel_flush(sd->server_io, NULL);
 
 	g_assert(status == G_IO_STATUS_NORMAL);
-}
-
-const char *rilmodem_test_get_socket_name(struct server_data *sd)
-{
-	return sd->sock_name;
 }

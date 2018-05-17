@@ -3,6 +3,7 @@
  *  oFono - Open Source Telephony
  *
  *  Copyright (C) 2008-2011  Intel Corporation. All rights reserved.
+ *  Copyright (C) 2014 Jolla Ltd.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2 as
@@ -28,6 +29,7 @@ extern "C" {
 
 #include <ofono/types.h>
 
+struct ofono_modem;
 struct ofono_voicecall;
 
 typedef void (*ofono_voicecall_cb_t)(const struct ofono_error *error,
@@ -170,6 +172,11 @@ void ofono_voicecall_ssn_mo_notify(struct ofono_voicecall *vc, unsigned int id,
 void ofono_voicecall_ssn_mt_notify(struct ofono_voicecall *vc, unsigned int id,
 					int code, int index,
 					const struct ofono_phone_number *ph);
+
+struct ofono_call *ofono_voicecall_find_call(struct ofono_voicecall *vc,
+						unsigned int id);
+void ofono_voicecall_ringback_tone_notify(struct ofono_voicecall *vc,
+						const ofono_bool_t playTone);
 
 #ifdef __cplusplus
 }

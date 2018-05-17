@@ -1088,6 +1088,27 @@ static void huawei_mode_notify(GAtResult *result, gpointer user_data)
 	}
 }
 
+static void huawei_hcsq_notify(GAtResult *result, gpointer user_data)
+{
+	struct ofono_netreg *netreg = user_data;
+	struct netreg_data *nd = ofono_netreg_get_data(netreg);
+	GAtResultIter iter;
+	const char *mode;
+
+	g_at_result_iter_init(&iter, result);
+
+	if (!g_at_result_iter_next(&iter, "^HCSQ:"))
+		return;
+
+	if (!g_at_result_iter_next_string(&iter, &mode))
+		return;
+
+	if (!strcmp("LTE", mode))
+		nd->tech = ACCESS_TECHNOLOGY_EUTRAN;
+
+	/* for other technologies, notification ^MODE is used */
+}
+
 static void huawei_nwtime_notify(GAtResult *result, gpointer user_data)
 {
 	struct ofono_netreg *netreg = user_data;
@@ -1580,17 +1601,28 @@ static inline ofono_bool_t append_cmer_element(char *buf, int *len, int cap,
 static ofono_bool_t build_cmer_string(char *buf, int *cmer_opts,
 					struct netreg_data *nd)
 {
-	const char *mode;
+	const char *ind;
 	int len = sprintf(buf, "AT+CMER=");
+	const char *mode;
 
 	DBG("");
+
+	switch (nd->vendor) {
+	case OFONO_VENDOR_UBLOX_TOBY_L2:
+		/* UBX-13002752 R33: TOBY L2 doesn't support mode 2 and 3 */
+		mode = "1";
+		break;
+	default:
+		mode = "3";
+		break;
+	}
 
 	/*
 	 * Forward unsolicited result codes directly to the TE;
 	 * TA‑TE link specific inband technique used to embed result codes and
 	 * data when TA is in on‑line data mode
 	 */
-	if (!append_cmer_element(buf, &len, cmer_opts[0], "3", FALSE))
+	if (!append_cmer_element(buf, &len, cmer_opts[0], mode, FALSE))
 		return FALSE;
 
 	/* No keypad event reporting */
@@ -1607,14 +1639,14 @@ static ofono_bool_t build_cmer_string(char *buf, int *cmer_opts,
 		 * Telit does not support mode 1.
 		 * All indicator events shall be directed from TA to TE.
 		 */
-		mode = "2";
+		ind = "2";
 		break;
 	default:
 		/*
 		 * Only those indicator events, which are not caused by +CIND
 		 * shall be indicated by the TA to the TE.
 		 */
-		mode = "1";
+		ind = "1";
 		break;
 	}
 
@@ -1623,7 +1655,7 @@ static ofono_bool_t build_cmer_string(char *buf, int *cmer_opts,
 	 * <ind> indicates the indicator order number (as specified for +CIND)
 	 * and <value> is the new value of indicator.
 	 */
-	if (!append_cmer_element(buf, &len, cmer_opts[3], mode, TRUE))
+	if (!append_cmer_element(buf, &len, cmer_opts[3], ind, TRUE))
 		return FALSE;
 
 	return TRUE;
@@ -1883,6 +1915,10 @@ static void at_creg_set_cb(gboolean ok, GAtResult *result, gpointer user_data)
 
 		/* Register for system mode reports */
 		g_at_chat_register(nd->chat, "^MODE:", huawei_mode_notify,
+						FALSE, netreg, NULL);
+
+		/* Register for 4G system mode reports */
+		g_at_chat_register(nd->chat, "^HCSQ:", huawei_hcsq_notify,
 						FALSE, netreg, NULL);
 
 		/* Register for network time reports */

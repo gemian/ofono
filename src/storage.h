@@ -25,9 +25,13 @@
 #define TFR
 #endif
 
-#include <stdlib.h>
 #include <fcntl.h>
 #include <sys/types.h>
+
+/* STORAGEDIR may need to be redefined in unit tests */
+#ifndef STORAGEDIR
+#  define STORAGEDIR DEFAULT_STORAGEDIR
+#endif
 
 int create_dirs(const char *filename, const mode_t mode);
 

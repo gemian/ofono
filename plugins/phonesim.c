@@ -35,7 +35,6 @@
 #include <glib.h>
 #include <gatmux.h>
 #include <gatchat.h>
-#include <gdbus.h>
 
 #define OFONO_API_SUBJECT_TO_CHANGE
 #include <ofono/plugin.h>
@@ -74,8 +73,6 @@ static const char *none_prefix[] = { NULL };
 static const char *ptty_prefix[] = { "+PTTY:", NULL };
 static const char *simstate_prefix[] = { "+SIMSTATE:", NULL };
 static int next_iface = 0;
-static const char CONTROL_PATH[] = "/";
-static const char CONTROL_INTERFACE[] = "org.ofono.phonesim.Manager";
 
 struct phonesim_data {
 	GAtMux *mux;
@@ -548,12 +545,13 @@ static void crst_notify(GAtResult *result, gpointer user_data)
 
 static void emulator_battery_cb(struct ofono_atom *atom, void *data)
 {
+	struct ofono_emulator *em = __ofono_atom_get_data(atom);
 	int val = 0;
 
 	if (GPOINTER_TO_INT(data) > 0)
 		val = (GPOINTER_TO_INT(data) - 1) / 20 + 1;
 
-	ofono_emulator_set_indicator(atom, OFONO_EMULATOR_IND_BATTERY, val);
+	ofono_emulator_set_indicator(em, OFONO_EMULATOR_IND_BATTERY, val);
 }
 
 static void cbc_notify(GAtResult *result, gpointer user_data)
@@ -1100,19 +1098,12 @@ error:
 
 static GSList *modem_list = NULL;
 
-static void parse_config(void)
+static void parse_config(const char *filename)
 {
 	GKeyFile *keyfile;
 	GError *err = NULL;
 	char **modems;
 	int i;
-	const char *filename;
-
-	char *conf_override = getenv("OFONO_PHONESIM_CONFIG");
-	if (conf_override)
-		filename = conf_override;
-	else
-		filename = CONFIGDIR "/phonesim.conf";
 
 	DBG("filename %s", filename);
 
@@ -1146,122 +1137,10 @@ done:
 	g_key_file_free(keyfile);
 }
 
-static void release_modems(void)
-{
-	GSList *list;
-
-	for (list = modem_list; list; list = list->next) {
-		struct ofono_modem *modem = list->data;
-
-		ofono_modem_remove(modem);
-	}
-
-	g_slist_free(modem_list);
-	modem_list = NULL;
-}
-
-static DBusMessage *control_add(DBusConnection *conn,
-					DBusMessage *msg, void *data)
-{
-	const char *driver = "phonesim";
-	struct ofono_modem *modem;
-	DBusMessageIter iter;
-	char *name;
-	char *address;
-	char *port;
-
-	if (!dbus_message_iter_init(msg, &iter))
-		return __ofono_error_invalid_args(msg);
-
-	if (dbus_message_iter_get_arg_type(&iter) != DBUS_TYPE_STRING)
-		return __ofono_error_invalid_args(msg);
-
-	dbus_message_iter_get_basic(&iter, &name);
-	dbus_message_iter_next(&iter);
-
-	if (dbus_message_iter_get_arg_type(&iter) != DBUS_TYPE_STRING)
-		return __ofono_error_invalid_args(msg);
-
-	dbus_message_iter_get_basic(&iter, &address);
-	dbus_message_iter_next(&iter);
-
-	if (dbus_message_iter_get_arg_type(&iter) != DBUS_TYPE_STRING)
-		return __ofono_error_invalid_args(msg);
-
-	dbus_message_iter_get_basic(&iter, &port);
-
-	modem = ofono_modem_create(name, driver);
-	if (modem == NULL)
-		return NULL;
-
-	ofono_modem_set_string(modem, "Address", address);
-	ofono_modem_set_integer(modem, "Port", atoi(port));
-	if (ofono_modem_register(modem) != 0) {
-		ofono_modem_remove(modem);
-		return __ofono_error_invalid_args(msg);
-	}
-	modem_list = g_slist_prepend(modem_list, modem);
-
-	return dbus_message_new_method_return(msg);
-}
-
-static DBusMessage *control_remove_all(DBusConnection *conn,
-					DBusMessage *msg, void *data)
-{
-	release_modems();
-
-	return dbus_message_new_method_return(msg);
-}
-
-static DBusMessage *control_reset(DBusConnection *conn,
-					DBusMessage *msg, void *data)
-{
-	release_modems();
-	parse_config();
-
-	return dbus_message_new_method_return(msg);
-}
-
-static const GDBusMethodTable control_methods[] = {
-	{ GDBUS_METHOD("Add",
-		GDBUS_ARGS({"name", "s"}, {"address", "s"}, {"port", "s"}),
-		NULL,
-		control_add) },
-	{ GDBUS_METHOD("RemoveAll",
-		GDBUS_ARGS({ }),
-		NULL,
-		control_remove_all) },
-	{ GDBUS_METHOD("Reset",
-		GDBUS_ARGS({ }),
-		NULL,
-		control_reset) },
-	{}
-};
-
-static int setup_control_channel(void)
-{
-	int err = 0;
-	DBusConnection *conn = ofono_dbus_get_connection();
-	void *user_data = NULL;
-	g_dbus_register_interface(conn,
-			CONTROL_PATH, CONTROL_INTERFACE,
-			control_methods,
-			NULL,
-			NULL,
-			user_data,
-			NULL);
-	return err;
-}
-
-static void shutdown_control_channel(void)
-{
-	g_dbus_unregister_interface(ofono_dbus_get_connection(),
-			CONTROL_PATH, CONTROL_INTERFACE);
-}
-
 static int phonesim_init(void)
 {
 	int err;
+	char *conf_override = getenv("OFONO_PHONESIM_CONFIG");
 
 	err = ofono_modem_driver_register(&phonesim_driver);
 	if (err < 0)
@@ -1273,21 +1152,25 @@ static int phonesim_init(void)
 	ofono_ctm_driver_register(&ctm_driver);
 	ofono_radio_settings_driver_register(&radio_settings_driver);
 
-	parse_config();
-
-	err = setup_control_channel();
-	if (err < 0)
-		return err;
+	if (conf_override)
+		parse_config(conf_override);
+	else
+		parse_config(CONFIGDIR "/phonesim.conf");
 
 	return 0;
 }
 
 static void phonesim_exit(void)
 {
-	shutdown_control_channel();
+	GSList *list;
 
-	release_modems();
+	for (list = modem_list; list; list = list->next) {
+		struct ofono_modem *modem = list->data;
 
+		ofono_modem_remove(modem);
+	}
+
+	g_slist_free(modem_list);
 	modem_list = NULL;
 
 	ofono_radio_settings_driver_unregister(&radio_settings_driver);

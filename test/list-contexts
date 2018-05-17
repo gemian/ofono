@@ -31,7 +31,7 @@ for path, properties in modems:
 					if i in ["DomainNameServers"]:
 						for n in properties[key][i]:
 							val += n + ","
-					elif i in ["PrefixLength", "ProxyPort"]:
+					elif i in ["PrefixLength"]:
 						p = int(properties[key][i])
 						val += str(p)
 					else:

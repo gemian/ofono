@@ -34,17 +34,11 @@
 #include <ofono/log.h>
 #include <ofono/modem.h>
 #include <ofono/call-volume.h>
-
-#include "gril.h"
-#include "grilutil.h"
-
 #include "common.h"
 
+#include "gril.h"
+
 #include "rilmodem.h"
-#include "rilutil.h"
-#include "parcel.h"
-#include "grilrequest.h"
-#include "grilreply.h"
 
 struct cv_data {
 	GRil *ril;
@@ -78,30 +72,41 @@ static void ril_call_volume_mute(struct ofono_call_volume *cv, int muted,
 	struct cb_data *cbd = cb_data_new(cb, data, cvd);
 	struct parcel rilp;
 
-	DBG("Initial ril muted state: %d", muted);
+	DBG("muted: %d", muted);
 
-	g_ril_request_set_mute(cvd->ril, muted, &rilp);
+	parcel_init(&rilp);
+
+	parcel_w_int32(&rilp, 1);
+	parcel_w_int32(&rilp, muted);
+
+	g_ril_append_print_buf(cvd->ril, "(%d)", muted);
 
 	if (g_ril_send(cvd->ril, RIL_REQUEST_SET_MUTE, &rilp,
-			volume_mute_cb, cbd, g_free) == 0) {
-		ofono_error("Send RIL_REQUEST_SET_MUTE failed.");
-		g_free(cbd);
-		CALLBACK_WITH_FAILURE(cb, data);
-	}
+			volume_mute_cb, cbd, g_free) > 0)
+		return;
+
+	g_free(cbd);
+	CALLBACK_WITH_FAILURE(cb, data);
 }
 
 static void probe_mute_cb(struct ril_msg *message, gpointer user_data)
 {
 	struct ofono_call_volume *cv = user_data;
 	struct cv_data *cvd = ofono_call_volume_get_data(cv);
+	struct parcel rilp;
 	int muted;
 
-	if (message->error != RIL_E_SUCCESS) {
-		ofono_error("Could not retrieve the ril mute state");
+	if (message->error != RIL_E_SUCCESS)
 		return;
-	}
 
-	muted = g_ril_reply_parse_get_mute(cvd->ril, message);
+	g_ril_init_parcel(message, &rilp);
+
+	/* skip length of int[] */
+	parcel_r_int32(&rilp);
+	muted = parcel_r_int32(&rilp);
+
+	g_ril_append_print_buf(cvd->ril, "{%d}", muted);
+	g_ril_print_response(cvd->ril, message);
 
 	ofono_call_volume_set_muted(cv, muted);
 }

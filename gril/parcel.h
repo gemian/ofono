@@ -23,6 +23,7 @@
 #define __PARCEL_H
 
 #include <stdlib.h>
+#include <stdint.h>
 
 struct parcel {
 	char *data;
@@ -32,11 +33,6 @@ struct parcel {
 	int malformed;
 };
 
-struct parcel_str_array {
-	int num_str;
-	char *str[];
-};
-
 void parcel_init(struct parcel *p);
 void parcel_grow(struct parcel *p, size_t size);
 void parcel_free(struct parcel *p);
@@ -44,10 +40,10 @@ int32_t parcel_r_int32(struct parcel *p);
 int parcel_w_int32(struct parcel *p, int32_t val);
 int parcel_w_string(struct parcel *p, const char *str);
 char *parcel_r_string(struct parcel *p);
+void parcel_skip_string(struct parcel *p);
 int parcel_w_raw(struct parcel *p, const void *data, size_t len);
 void *parcel_r_raw(struct parcel *p,  int *len);
 size_t parcel_data_avail(struct parcel *p);
-struct parcel_str_array *parcel_r_str_array(struct parcel *p);
-void parcel_free_str_array(struct parcel_str_array *str_arr);
+char **parcel_r_strv(struct parcel *p);
 
 #endif

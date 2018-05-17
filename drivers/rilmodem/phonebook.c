@@ -48,7 +48,6 @@
 #include "simutil.h"
 #include "common.h"
 
-#include "rilutil.h"
 #include "rilmodem.h"
 
 #define UNUSED	0xFF

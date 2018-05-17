@@ -29,8 +29,14 @@ extern "C" {
 #include <ofono/types.h>
 
 struct ofono_gprs_context;
+struct ofono_modem;
 
-#define OFONO_GPRS_MAX_APN_LENGTH 127
+/*
+ * ETSI 123.003, Section 9.1:
+ * the APN has, after encoding as defined in the paragraph below, a maximum
+ * length of 100 octets
+ */
+#define OFONO_GPRS_MAX_APN_LENGTH 100
 #define OFONO_GPRS_MAX_USERNAME_LENGTH 63
 #define OFONO_GPRS_MAX_PASSWORD_LENGTH 255
 
@@ -46,17 +52,17 @@ enum ofono_gprs_context_type {
 	OFONO_GPRS_CONTEXT_TYPE_MMS,
 	OFONO_GPRS_CONTEXT_TYPE_WAP,
 	OFONO_GPRS_CONTEXT_TYPE_IMS,
-	OFONO_GPRS_CONTEXT_TYPE_IA,
 };
 
 enum ofono_gprs_auth_method {
-	OFONO_GPRS_AUTH_METHOD_CHAP = 0,
+	OFONO_GPRS_AUTH_METHOD_ANY = 0,
+	OFONO_GPRS_AUTH_METHOD_NONE,
+	OFONO_GPRS_AUTH_METHOD_CHAP,
 	OFONO_GPRS_AUTH_METHOD_PAP,
 };
 
 struct ofono_gprs_primary_context {
 	unsigned int cid;
-	int direction;
 	char apn[OFONO_GPRS_MAX_APN_LENGTH + 1];
 	char username[OFONO_GPRS_MAX_USERNAME_LENGTH + 1];
 	char password[OFONO_GPRS_MAX_PASSWORD_LENGTH + 1];
@@ -80,6 +86,9 @@ struct ofono_gprs_context_driver {
 					ofono_gprs_context_cb_t cb, void *data);
 	void (*detach_shutdown)(struct ofono_gprs_context *gc,
 					unsigned int id);
+	void (*read_settings)(struct ofono_gprs_context *gc,
+				unsigned int cid,
+				ofono_gprs_context_cb_t cb, void *data);
 };
 
 void ofono_gprs_context_deactivated(struct ofono_gprs_context *gc,
@@ -102,6 +111,8 @@ struct ofono_modem *ofono_gprs_context_get_modem(struct ofono_gprs_context *gc);
 
 void ofono_gprs_context_set_type(struct ofono_gprs_context *gc,
 					enum ofono_gprs_context_type type);
+enum ofono_gprs_context_type ofono_gprs_context_get_type(
+						struct ofono_gprs_context *gc);
 
 void ofono_gprs_context_set_interface(struct ofono_gprs_context *gc,
 					const char *interface);
@@ -124,6 +135,10 @@ void ofono_gprs_context_set_ipv6_gateway(struct ofono_gprs_context *gc,
 						const char *gateway);
 void ofono_gprs_context_set_ipv6_dns_servers(struct ofono_gprs_context *gc,
 						const char **dns);
+
+void ofono_gprs_context_signal_change(struct ofono_gprs_context *gc,
+							unsigned int cid);
+
 #ifdef __cplusplus
 }
 #endif

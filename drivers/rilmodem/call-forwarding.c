@@ -36,48 +36,16 @@
 #include <ofono/log.h>
 #include <ofono/modem.h>
 #include <ofono/call-forwarding.h>
-
-#include "gril.h"
-#include "grilrequest.h"
-#include "grilreply.h"
-#include "grilunsol.h"
-
-#include "rilutil.h"
-#include "rilmodem.h"
-
 #include "common.h"
 
-enum cf_action {
-	CF_ACTION_DISABLE,
-	CF_ACTION_ENABLE,
-	CF_ACTION_INTERROGATE,
-	CF_ACTION_REGISTRATION,
-	CF_ACTION_ERASURE,
-};
+#include "gril.h"
+
+#include "rilmodem.h"
 
 struct forw_data {
 	GRil *ril;
-	enum cf_action last_action;
 	int last_cls;
 };
-
-static const char *cf_action_to_string(enum cf_action action)
-{
-	switch (action) {
-	case CF_ACTION_DISABLE:
-		return "DISABLE";
-	case CF_ACTION_ENABLE:
-		return "ENABLE";
-	case CF_ACTION_INTERROGATE:
-		return "INTERROGATE";
-	case CF_ACTION_REGISTRATION:
-		return "REGISTRATION";
-	case CF_ACTION_ERASURE:
-		return "ERASURE";
-	}
-
-	return NULL;
-}
 
 static void ril_query_call_fwd_cb(struct ril_msg *message, gpointer user_data)
 {
@@ -85,7 +53,9 @@ static void ril_query_call_fwd_cb(struct ril_msg *message, gpointer user_data)
 	struct forw_data *fd = ofono_call_forwarding_get_data(cbd->user);
 	ofono_call_forwarding_query_cb_t cb = cbd->cb;
 	struct ofono_call_forwarding_condition *list;
-	unsigned int list_size = -1;
+	struct parcel rilp;
+	unsigned int list_size;
+	unsigned int i;
 
 	if (message->error != RIL_E_SUCCESS) {
 		ofono_error("%s: rild error: %s", __func__,
@@ -93,23 +63,68 @@ static void ril_query_call_fwd_cb(struct ril_msg *message, gpointer user_data)
 		goto error;
 	}
 
-	list = g_ril_reply_parse_query_call_fwd(fd->ril, message, &list_size);
-	/*
-	 * From atmodem:
-	 *
-	 * Specification is really unclear about this
-	 * generate status=0 for all classes just in case
-	 */
+	g_ril_init_parcel(message, &rilp);
+
+	if (rilp.size < sizeof(int32_t))
+		goto error;
+
+	list_size = parcel_r_int32(&rilp);
 	if (list_size == 0) {
 		list = g_new0(struct ofono_call_forwarding_condition, 1);
 		list_size = 1;
 
 		list->status = 0;
 		list->cls = fd->last_cls;
-	} else if (list == NULL) {
-		goto error;
+		goto done;
 	}
 
+	list = g_new0(struct ofono_call_forwarding_condition, list_size);
+
+	g_ril_append_print_buf(fd->ril, "{");
+
+	for (i = 0; i < list_size; i++) {
+		char *str;
+
+		list[i].status =  parcel_r_int32(&rilp);
+
+		parcel_r_int32(&rilp); /* skip reason */
+
+		list[i].cls = parcel_r_int32(&rilp);
+		list[i].phone_number.type = parcel_r_int32(&rilp);
+
+		str = parcel_r_string(&rilp);
+
+		if (str != NULL) {
+			strncpy(list[i].phone_number.number, str,
+				OFONO_MAX_PHONE_NUMBER_LENGTH);
+			g_free(str);
+
+			list[i].phone_number.number[
+				OFONO_MAX_PHONE_NUMBER_LENGTH] = '\0';
+		}
+
+		list[i].time = parcel_r_int32(&rilp);
+
+		if (rilp.malformed) {
+			ofono_error("%s: malformed parcel", __func__);
+			g_free(list);
+			goto error;
+		}
+
+		g_ril_append_print_buf(fd->ril, "%s [%d,%d,%d,%s,%d]",
+					print_buf,
+					list[i].status,
+					list[i].cls,
+					list[i].phone_number.type,
+					list[i].phone_number.number,
+					list[i].time);
+
+	}
+
+	g_ril_append_print_buf(fd->ril, "%s}", print_buf);
+	g_ril_print_response(fd->ril, message);
+
+done:
 	CALLBACK_WITH_SUCCESS(cb, (int) list_size, list, cbd->data);
 	g_free(list);
 	return;
@@ -124,116 +139,132 @@ static void ril_set_forward_cb(struct ril_msg *message, gpointer user_data)
 	ofono_call_forwarding_set_cb_t cb = cbd->cb;
 	struct forw_data *fd = ofono_call_forwarding_get_data(cbd->user);
 
-	if (message->error == RIL_E_SUCCESS) {
-		g_ril_print_response_no_args(fd->ril, message);
-		CALLBACK_WITH_SUCCESS(cb, cbd->data);
-	} else {
-		ofono_error("%s: CF %s failed; rild error: %s", __func__,
-				cf_action_to_string(fd->last_action),
-				ril_error_to_string(message->error));
+	if (message->error != RIL_E_SUCCESS) {
+		ofono_error("%s: failed; rild error: %s", __func__,
+					ril_error_to_string(message->error));
 		CALLBACK_WITH_FAILURE(cb, cbd->data);
 	}
+
+	g_ril_print_response_no_args(fd->ril, message);
+	CALLBACK_WITH_SUCCESS(cb, cbd->data);
 }
 
-static int ril_send_forward_cmd(int type, int cls,
-				const struct ofono_phone_number *number,
-				int time,
-				struct cb_data *cbd,
-				enum cf_action action)
-{
-	struct ofono_call_forwarding *cf = cbd->user;
-	struct forw_data *fd = ofono_call_forwarding_get_data(cf);
-	struct parcel rilp;
-	struct req_call_fwd fwd_req;
-	int ret = 0, request;
-	GRilResponseFunc response_func;
 
-	if (action == CF_ACTION_INTERROGATE) {
-		request = RIL_REQUEST_QUERY_CALL_FORWARD_STATUS;
-		response_func = ril_query_call_fwd_cb;
-	} else {
-		request = RIL_REQUEST_SET_CALL_FORWARD;
-		response_func = ril_set_forward_cb;
-	}
+/*
+ * Modem seems to respond with error to all queries or settings made with
+ * bearer class BEARER_CLASS_DEFAULT. Design decision: If given class is
+ * BEARER_CLASS_DEFAULT let's map it to SERVICE_CLASS_NONE as with it e.g.
+ * ./send-ussd '*21*<phone_number>#' returns cls:53 i.e. 1+4+16+32 as
+ * service class.
+*/
+#define FIXUP_CLS() \
+	if (cls == BEARER_CLASS_DEFAULT)	\
+		cls = SERVICE_CLASS_NONE	\
 
-	DBG("%s - %s", ril_request_id_to_string(request),
-		cf_action_to_string(action));
+/*
+ * Activation/deactivation/erasure actions, have no number associated with them,
+ * but apparently rild expects a number anyway.  So fields need to be filled.
+ * Otherwise there is no response.
+ */
+#define APPEND_DUMMY_NUMBER() \
+	parcel_w_int32(&rilp, 0x81);		\
+	parcel_w_string(&rilp, "1234567890")	\
 
-	/*
-	 * Modem seems to respond with error to all queries
-	 * or settings made with bearer class
-	 * BEARER_CLASS_DEFAULT. Design decision: If given
-	 * class is BEARER_CLASS_DEFAULT let's map it to
-	 * SERVICE_CLASS_NONE as with it e.g. ./send-ussd '*21*<phone_number>#'
-	 * returns cls:53 i.e. 1+4+16+32 as service class.
-	*/
-	if (cls == BEARER_CLASS_DEFAULT)
-		cls = SERVICE_CLASS_NONE;
-
-	fd->last_action = action;
-	fd->last_cls = cls;
-
-	fwd_req.action = (int) action;
-	fwd_req.type = type;
-	fwd_req.cls = cls;
-	fwd_req.number = number;
-
-	/*
-	 * time has no real meaing for action commands other
-	 * then registration, so if not needed, set arbitrary
-	 * 60s time so rild doesn't return an error.
-	 */
-	if (time == -1)
-		fwd_req.time = 60;
-	else
-		fwd_req.time = time;
-
-	g_ril_request_call_fwd(fd->ril, &fwd_req, &rilp);
-
-	ret = g_ril_send(fd->ril, request, &rilp, response_func, cbd, g_free);
-	if (ret == 0)
-		ofono_error("%s: CF action %s failed", __func__,
-				cf_action_to_string(action));
-	return ret;
-}
+/*
+ * Time has no real meaing for action commands other then registration, so
+ * if not needed, set arbitrary 60s time so rild doesn't return an error.
+ */
+#define APPEND_DUMMY_TIME() \
+	parcel_w_int32(&rilp, 60);
 
 static void ril_activate(struct ofono_call_forwarding *cf,
 				int type, int cls,
 				ofono_call_forwarding_set_cb_t cb, void *data)
 {
+	struct forw_data *fd = ofono_call_forwarding_get_data(cf);
 	struct cb_data *cbd = cb_data_new(cb, data, cf);
+	struct parcel rilp;
 
-	if (ril_send_forward_cmd(type, cls, NULL, -1, cbd,
-					CF_ACTION_ENABLE) == 0) {
-		CALLBACK_WITH_FAILURE(cb, cbd->data);
-		g_free(cbd);
-	}
+	FIXUP_CLS();
+
+	parcel_init(&rilp);
+
+	parcel_w_int32(&rilp, 1);	/* Activation: 1 */
+	parcel_w_int32(&rilp, type);
+	parcel_w_int32(&rilp, cls);
+	APPEND_DUMMY_NUMBER();
+	APPEND_DUMMY_TIME();
+
+	g_ril_append_print_buf(fd->ril, "(action: 1, type: %d cls: %d "
+					"number type: %d number: %s time: %d)",
+					type, cls, 0x81, "1234567890", 60);
+
+	if (g_ril_send(fd->ril, RIL_REQUEST_SET_CALL_FORWARD,
+				&rilp, ril_set_forward_cb, cbd, g_free) > 0)
+		return;
+
+	CALLBACK_WITH_FAILURE(cb, cbd->data);
+	g_free(cbd);
 }
 
 static void ril_erasure(struct ofono_call_forwarding *cf,
 				int type, int cls,
 				ofono_call_forwarding_set_cb_t cb, void *data)
 {
+	struct forw_data *fd = ofono_call_forwarding_get_data(cf);
 	struct cb_data *cbd = cb_data_new(cb, data, cf);
+	struct parcel rilp;
 
-	if (ril_send_forward_cmd(type, cls, NULL, -1, cbd,
-					CF_ACTION_ERASURE) == 0) {
-		CALLBACK_WITH_FAILURE(cb, cbd->data);
-		g_free(cbd);
-	}
+	FIXUP_CLS();
+
+	parcel_init(&rilp);
+
+	parcel_w_int32(&rilp, 4);	/* Erasure: 4 */
+	parcel_w_int32(&rilp, type);
+	parcel_w_int32(&rilp, cls);
+	APPEND_DUMMY_NUMBER();
+	APPEND_DUMMY_TIME();
+
+	g_ril_append_print_buf(fd->ril, "(action: 4, type: %d cls: %d "
+					"number type: %d number: %s time: %d)",
+					type, cls, 0x81, "1234567890", 60);
+
+	if (g_ril_send(fd->ril, RIL_REQUEST_SET_CALL_FORWARD,
+				&rilp, ril_set_forward_cb, cbd, g_free) > 0)
+		return;
+
+	CALLBACK_WITH_FAILURE(cb, cbd->data);
+	g_free(cbd);
 }
 
 static void ril_deactivate(struct ofono_call_forwarding *cf,
 				int type, int cls,
 				ofono_call_forwarding_set_cb_t cb, void *data)
 {
+	struct forw_data *fd = ofono_call_forwarding_get_data(cf);
 	struct cb_data *cbd = cb_data_new(cb, data, cf);
+	struct parcel rilp;
 
-	if (ril_send_forward_cmd(type, cls, NULL, -1, cbd,
-					CF_ACTION_DISABLE) == 0) {
-		CALLBACK_WITH_FAILURE(cb, cbd->data);
-		g_free(cbd);
-	}
+	FIXUP_CLS();
+
+	parcel_init(&rilp);
+
+	parcel_w_int32(&rilp, 0);	/* Deactivation: 0 */
+	parcel_w_int32(&rilp, type);
+	parcel_w_int32(&rilp, cls);
+	APPEND_DUMMY_NUMBER();
+	APPEND_DUMMY_TIME();
+
+	g_ril_append_print_buf(fd->ril, "(action: 0, type: %d cls: %d "
+					"number type: %d number: %s time: %d)",
+					type, cls, 0x81, "1234567890", 60);
+
+	if (g_ril_send(fd->ril, RIL_REQUEST_SET_CALL_FORWARD,
+				&rilp, ril_set_forward_cb, cbd, g_free) > 0)
+		return;
+
+	CALLBACK_WITH_FAILURE(cb, cbd->data);
+	g_free(cbd);
 }
 
 static void ril_registration(struct ofono_call_forwarding *cf, int type,
@@ -242,26 +273,64 @@ static void ril_registration(struct ofono_call_forwarding *cf, int type,
 				int time, ofono_call_forwarding_set_cb_t cb,
 				void *data)
 {
+	struct forw_data *fd = ofono_call_forwarding_get_data(cf);
 	struct cb_data *cbd = cb_data_new(cb, data, cf);
+	struct parcel rilp;
 
-	if (ril_send_forward_cmd(type, cls, number, time, cbd,
-					CF_ACTION_REGISTRATION) == 0) {
-		CALLBACK_WITH_FAILURE(cb, cbd->data);
-		g_free(cbd);
-	}
+	FIXUP_CLS();
+
+	parcel_init(&rilp);
+
+	parcel_w_int32(&rilp, 3);	/* Registration: 3 */
+	parcel_w_int32(&rilp, type);
+	parcel_w_int32(&rilp, cls);
+	parcel_w_int32(&rilp, number->type);
+	parcel_w_string(&rilp, number->number);
+	parcel_w_int32(&rilp, time);
+
+	g_ril_append_print_buf(fd->ril, "(action: 3, type: %d cls: %d "
+					"number type: %d number: %s time: %d)",
+					type, cls, number->type, number->number,
+					time);
+
+	if (g_ril_send(fd->ril, RIL_REQUEST_SET_CALL_FORWARD,
+				&rilp, ril_set_forward_cb, cbd, g_free) > 0)
+		return;
+
+	CALLBACK_WITH_FAILURE(cb, cbd->data);
+	g_free(cbd);
 }
 
 static void ril_query(struct ofono_call_forwarding *cf, int type, int cls,
 				ofono_call_forwarding_query_cb_t cb,
 				void *data)
 {
+	struct forw_data *fd = ofono_call_forwarding_get_data(cf);
 	struct cb_data *cbd = cb_data_new(cb, data, cf);
+	struct parcel rilp;
 
-	if (ril_send_forward_cmd(type, cls, NULL, -1, cbd,
-					CF_ACTION_INTERROGATE) == 0) {
-		CALLBACK_WITH_FAILURE(cb, 0, NULL, cbd->data);
-		g_free(cbd);
-	}
+	FIXUP_CLS();
+
+	parcel_init(&rilp);
+
+	parcel_w_int32(&rilp, 2);	/* Interrogation: 2 */
+	parcel_w_int32(&rilp, type);
+	parcel_w_int32(&rilp, cls);
+	APPEND_DUMMY_NUMBER();
+	APPEND_DUMMY_TIME();
+
+	g_ril_append_print_buf(fd->ril, "(action: 2, type: %d cls: %d "
+					"number type: %d number: %s time: %d)",
+					type, cls, 0x81, "1234567890", 60);
+
+	fd->last_cls = cls;
+
+	if (g_ril_send(fd->ril, RIL_REQUEST_QUERY_CALL_FORWARD_STATUS,
+				&rilp, ril_query_call_fwd_cb, cbd, g_free) > 0)
+		return;
+
+	CALLBACK_WITH_FAILURE(cb, 0, NULL, cbd->data);
+	g_free(cbd);
 }
 
 static gboolean ril_delayed_register(gpointer user_data)

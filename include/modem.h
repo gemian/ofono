@@ -29,6 +29,8 @@ extern "C" {
 #include <ofono/types.h>
 
 struct ofono_modem;
+struct ofono_gprs;
+struct ofono_sim;
 
 enum ofono_modem_type {
 	OFONO_MODEM_TYPE_HARDWARE = 0,
@@ -80,6 +82,8 @@ void ofono_modem_remove_interface(struct ofono_modem *modem,
 					const char *interface);
 
 const char *ofono_modem_get_path(struct ofono_modem *modem);
+struct ofono_sim *ofono_modem_get_sim(struct ofono_modem *modem);
+struct ofono_gprs *ofono_modem_get_gprs(struct ofono_modem *modem);
 
 void ofono_modem_set_data(struct ofono_modem *modem, void *data);
 void *ofono_modem_get_data(struct ofono_modem *modem);
@@ -114,10 +118,6 @@ int ofono_modem_set_boolean(struct ofono_modem *modem,
 				const char *key, ofono_bool_t value);
 ofono_bool_t ofono_modem_get_boolean(struct ofono_modem *modem,
 					const char *key);
-
-void ofono_modem_set_driver_watches_sim(struct ofono_modem *modem,
-					ofono_bool_t value);
-ofono_bool_t ofono_modem_get_driver_watches_sim(struct ofono_modem *modem);
 
 int ofono_modem_driver_register(const struct ofono_modem_driver *);
 void ofono_modem_driver_unregister(const struct ofono_modem_driver *);

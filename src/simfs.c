@@ -74,8 +74,9 @@ struct sim_fs_op {
 	struct ofono_sim_context *context;
 };
 
-static void sim_fs_op_free(struct sim_fs_op *node)
+static void sim_fs_op_free(gpointer pointer)
 {
+	struct sim_fs_op *node = pointer;
 	g_free(node->buffer);
 	g_free(node);
 }
@@ -105,8 +106,7 @@ void sim_fs_free(struct sim_fs *fs)
 	 * for operations still in progress
 	 */
 	if (fs->op_q) {
-		g_queue_foreach(fs->op_q, (GFunc) sim_fs_op_free, NULL);
-		g_queue_free(fs->op_q);
+		g_queue_free_full(fs->op_q, sim_fs_op_free);
 		fs->op_q = NULL;
 	}
 
@@ -225,6 +225,9 @@ void sim_fs_notify_file_watches(struct sim_fs *fs, int id)
 	for (l = fs->contexts; l; l = l->next) {
 		struct ofono_sim_context *context = l->data;
 		GSList *k;
+
+		if (context->file_watches == NULL)
+			continue;
 
 		for (k = context->file_watches->items; k; k = k->next) {
 			struct file_watch *w = k->data;
@@ -687,8 +690,8 @@ static void sim_fs_op_info_cb(const struct ofono_error *error, int length,
 					access, file_status);
 
 	if (structure != op->structure) {
-		ofono_error("Requested file structure differs from SIM: id:%x, s: %d, o->s:%d",
-				op->id, structure, op->structure);
+		ofono_error("Requested file structure differs from SIM: %x",
+				op->id);
 		sim_fs_op_error(fs);
 		return;
 	}

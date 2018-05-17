@@ -102,8 +102,10 @@ static struct ssc_entry *ssc_entry_create(const char *sc, void *cb, void *data,
 	return r;
 }
 
-static void ssc_entry_destroy(struct ssc_entry *ca)
+static void ssc_entry_destroy(gpointer pointer)
 {
+	struct ssc_entry *ca = pointer;
+
 	if (ca->destroy)
 		ca->destroy(ca->user);
 
@@ -415,13 +417,18 @@ void ofono_ussd_notify(struct ofono_ussd *ussd, int status, int dcs,
 	}
 
 	if (status == OFONO_USSD_STATUS_TERMINATED) {
-		ussd_change_state(ussd, USSD_STATE_IDLE);
+		if (ussd->state == USSD_STATE_ACTIVE && data && data_len > 0) {
+			/* Interpret that as a Notify */
+			status = OFONO_USSD_STATUS_NOTIFY;
+		} else {
+			ussd_change_state(ussd, USSD_STATE_IDLE);
 
-		if (ussd->pending == NULL)
-			return;
+			if (ussd->pending == NULL)
+				return;
 
-		reply = __ofono_error_network_terminated(ussd->pending);
-		goto out;
+			reply = __ofono_error_network_terminated(ussd->pending);
+			goto out;
+		}
 	}
 
 	if (status == OFONO_USSD_STATUS_NOT_SUPPORTED) {
@@ -444,8 +451,11 @@ void ofono_ussd_notify(struct ofono_ussd *ussd, int status, int dcs,
 		goto out;
 	}
 
-	if (data && data_len > 0)
+	if (data && data_len > 0 && (dcs != 0xFF))
 		utf8_str = ussd_decode(dcs, data_len, data);
+	else
+		/*String is already in UTF-8 format*/
+		utf8_str = (char *)data;
 
 	str = utf8_str;
 
@@ -510,6 +520,20 @@ void ofono_ussd_notify(struct ofono_ussd *ussd, int status, int dcs,
 
 		ussd_change_state(ussd, new_state);
 		goto free;
+	} else if (ussd->state == USSD_STATE_USER_ACTION &&
+				status != OFONO_USSD_STATUS_ACTION_REQUIRED) {
+		ussd_change_state(ussd, USSD_STATE_IDLE);
+
+		if (status == OFONO_USSD_STATUS_NOTIFY && str && str[0]) {
+			const char *path = __ofono_atom_get_path(ussd->atom);
+
+			g_dbus_emit_signal(conn, path,
+				OFONO_SUPPLEMENTARY_SERVICES_INTERFACE,
+				"NotificationReceived", DBUS_TYPE_STRING,
+				&str, DBUS_TYPE_INVALID);
+		}
+
+		goto free;
 	} else {
 		ofono_error("Received an unsolicited USSD but can't handle.");
 		DBG("USSD is: status: %d, %s", status, str);
@@ -556,7 +580,7 @@ static DBusMessage *ussd_initiate(DBusConnection *conn, DBusMessage *msg,
 	struct ofono_voicecall *vc;
 	gboolean call_in_progress;
 	const char *str;
-	int dcs;
+	int dcs = 0x0f;
 	unsigned char buf[160];
 	long num_packed;
 
@@ -585,7 +609,7 @@ static DBusMessage *ussd_initiate(DBusConnection *conn, DBusMessage *msg,
 	if (!valid_ussd_string(str, call_in_progress))
 		return __ofono_error_not_recognized(msg);
 
-	if (!ussd_dcs_encode(str, &dcs, &num_packed, buf))
+	if (!ussd_encode(str, &num_packed, buf))
 		return __ofono_error_invalid_format(msg);
 
 	if (ussd->driver->request == NULL)
@@ -626,7 +650,7 @@ static DBusMessage *ussd_respond(DBusConnection *conn, DBusMessage *msg,
 {
 	struct ofono_ussd *ussd = data;
 	const char *str;
-	int dcs;
+	int dcs = 0x0f;
 	unsigned char buf[160];
 	long num_packed;
 
@@ -643,7 +667,7 @@ static DBusMessage *ussd_respond(DBusConnection *conn, DBusMessage *msg,
 	if (strlen(str) == 0)
 		return __ofono_error_invalid_format(msg);
 
-	if (!ussd_dcs_encode(str, &dcs, &num_packed, buf))
+	if (!ussd_encode(str, &num_packed, buf))
 		return __ofono_error_invalid_format(msg);
 
 	if (ussd->driver->request == NULL)
@@ -790,12 +814,10 @@ static void ussd_unregister(struct ofono_atom *atom)
 	struct ofono_modem *modem = __ofono_atom_get_modem(atom);
 	const char *path = __ofono_atom_get_path(atom);
 
-	g_slist_foreach(ussd->ss_control_list, (GFunc) ssc_entry_destroy, NULL);
-	g_slist_free(ussd->ss_control_list);
+	g_slist_free_full(ussd->ss_control_list, ssc_entry_destroy);
 	ussd->ss_control_list = NULL;
 
-	g_slist_foreach(ussd->ss_passwd_list, (GFunc) ssc_entry_destroy, NULL);
-	g_slist_free(ussd->ss_passwd_list);
+	g_slist_free_full(ussd->ss_passwd_list, ssc_entry_destroy);
 	ussd->ss_passwd_list = NULL;
 
 	ofono_modem_remove_interface(modem,

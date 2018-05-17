@@ -220,8 +220,10 @@ static void test_mux(void)
 
 static void test_basic(void)
 {
-	g_test_trap_subprocess("/testmux/basic:subprocess",
-				60 * 1000 * 1000, 0);
+	if (g_test_trap_fork(60 * 1000 * 1000, 0) == TRUE) {
+		test_mux();
+		exit(0);
+	}
 
 	g_test_trap_assert_passed();
 	//g_test_trap_assert_stderr("failed");
@@ -563,7 +565,6 @@ int main(int argc, char **argv)
 	g_test_add_func("/testmux/extract_basic", test_extract_basic);
 	g_test_add_func("/testmux/extract_advanced", test_extract_advanced);
 	g_test_add_func("/testmux/basic", test_basic);
-	g_test_add_func("/testmux/basic:subprocess", test_mux);
 
 	return g_test_run();
 }

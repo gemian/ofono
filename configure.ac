@@ -1,5 +1,5 @@
 AC_PREREQ(2.60)
-AC_INIT(ofono, 1.18)
+AC_INIT(ofono, 1.21)
 
 AM_INIT_AUTOMAKE([foreign subdir-objects color-tests])
 AC_CONFIG_HEADERS(config.h)
@@ -42,6 +42,7 @@ AC_ARG_ENABLE(debug, AC_HELP_STRING([--enable-debug],
 	if (test "${enableval}" = "yes" &&
 				test "${ac_cv_prog_cc_g}" = "yes"); then
 		CFLAGS="$CFLAGS -g"
+                CPPFLAGS="$CPPFLAGS -DDEBUG"
 	fi
 ])
 
@@ -63,10 +64,20 @@ AC_CHECK_FUNC(signalfd, dummy=yes,
 AC_CHECK_LIB(dl, dlopen, dummy=yes,
 			AC_MSG_ERROR(dynamic linking loader is required))
 
-PKG_CHECK_MODULES(GLIB, glib-2.0 >= 2.28, dummy=yes,
-				AC_MSG_ERROR(GLib >= 2.28 is required))
+PKG_CHECK_MODULES(GLIB, glib-2.0 >= 2.32, dummy=yes,
+				AC_MSG_ERROR(GLib >= 2.32 is required))
 AC_SUBST(GLIB_CFLAGS)
 AC_SUBST(GLIB_LIBS)
+
+PKG_CHECK_MODULES(GOBJECT, gobject-2.0, dummy=yes,
+				AC_MSG_ERROR(GObject is required))
+GLIB_CFLAGS="$GLIB_CFLAGS $GOBJECT_CFLAGS"
+GLIB_LIBS="$GLIB_LIBS $GOBJECT_LIBS"
+
+PKG_CHECK_MODULES(GIO, gio-2.0, dummy=yes,
+				AC_MSG_ERROR(GIO is required))
+GLIB_CFLAGS="$GLIB_CFLAGS $GIO_CFLAGS"
+GLIB_LIBS="$GLIB_LIBS $GIO_LIBS"
 
 if (test "${enable_threads}" = "yes"); then
 	AC_DEFINE(NEED_THREADS, 1, [Define if threading support is required])
@@ -166,6 +177,51 @@ AC_ARG_ENABLE(rilmodem, AC_HELP_STRING([--disable-rilmodem],
                                         [enable_rilmodem=${enableval}])
 AM_CONDITIONAL(RILMODEM, test "${enable_rilmodem}" != "no")
 
+AC_ARG_ENABLE(sailfish-rilmodem, AC_HELP_STRING([--enable-sailfish-rilmodem],
+				[enable Sailfish RIL modem]),
+				[enable_sailfish_rilmodem=${enableval}],
+				[enable_sailfish_rilmodem="no"])
+AM_CONDITIONAL(SAILFISH_RILMODEM, test "${enable_sailfish_rilmodem}" != "no")
+
+if (test "${enable_sailfish_rilmodem}" = "yes"); then
+	PKG_CHECK_MODULES(GRILIO, libgrilio >= 1.0.21, dummy=yes,
+				AC_MSG_ERROR(libgrilio >= 1.0.21 is required))
+	PKG_CHECK_MODULES(GLIBUTIL, libglibutil >= 1.0.23, dummy=yes,
+				AC_MSG_ERROR(libglibutil >= 1.0.23 is required))
+	PKG_CHECK_MODULES(LIBMCE, libmce-glib >= 1.0.5, dummy=yes,
+				AC_MSG_ERROR(libmce-glib >= 1.0.5 is required))
+	CFLAGS="$CFLAGS $GRILIO_CFLAGS $LIBMCE_CFLAGS"
+	LIBS="$LIBS $GRILIO_LIBS $LIBMCE_LIBS"
+	enable_sailfish_manager=yes
+	need_glibutil=yes
+fi
+
+AC_ARG_ENABLE(sailfish-manager,
+		AC_HELP_STRING([--enable-sailfish-manager],
+			[enable Sailfish OS modem manager plugin]),
+					[enable_sailfish_manager=${enableval}])
+AM_CONDITIONAL(SAILFISH_MANAGER, test "${enable_sailfish_manager}" = "yes")
+
+if (test "${enable_sailfish_manager}" = "yes"); then
+	PKG_CHECK_MODULES(DBUS_GLIB, dbus-glib-1, dummy=yes,
+			AC_MSG_ERROR(dbus-glib is required by unit tests))
+	AC_SUBST(DBUS_GLIB_CFLAGS)
+	AC_SUBST(DBUS_GLIB_LIBS)
+fi
+
+AC_ARG_ENABLE(add-remove-context, AC_HELP_STRING([--disable-add-remove-context],
+		[don't allow to add or remove connection context over D-Bus]), [
+	if (test "${enableval}" = "no"); then
+		CFLAGS="$CFLAGS -DDISABLE_ADD_REMOVE_CONTEXT"
+	fi
+])
+
+AC_ARG_ENABLE(test-coverage,
+	AC_HELP_STRING([--enable-test-coverage], [enable test code coverage]),
+				[enable_test_coverage=${enableval}],
+					[enable_test_coverage="no"])
+AM_CONDITIONAL(TEST_COVERAGE, test "${enable_test_coverage}" != "no")
+
 AC_ARG_ENABLE(qmimodem, AC_HELP_STRING([--disable-qmimodem],
 				[disable Qualcomm QMI modem support]),
 					[enable_qmimodem=${enableval}])
@@ -182,38 +238,29 @@ AC_ARG_ENABLE(bluez4, AC_HELP_STRING([--enable-bluez4],
 if (test "${enable_bluez4}" = "yes"); then
 	PKG_CHECK_MODULES(BLUEZ, bluez >= 4.99 bluez < 5, dummy=yes,
 			  AC_MSG_ERROR(Bluetooth library >= 4.99 and < 5 is required))
-	AC_SUBST(BLUEZ_CFLAGS)
-	AC_SUBST(BLUEZ_LIBS)
+AC_SUBST(BLUEZ_CFLAGS)
+AC_SUBST(BLUEZ_LIBS)
 fi
 
 AM_CONDITIONAL(BLUEZ4, test "${enable_bluetooth}" != "no" && test "${enable_bluez4}" = "yes")
 AM_CONDITIONAL(BLUETOOTH, test "${enable_bluetooth}" != "no")
 
-AC_ARG_ENABLE(cares, AC_HELP_STRING([--disable-cares],
-				[disable DNS client using c-ares library]),
-						[enable_cares=${enableval}])
-if (test "${enable_cares}" != "no"); then
-	PKG_CHECK_MODULES(CARES, libcares, dummy=yes,
-					AC_MSG_ERROR(libcares is required))
-fi
-AC_SUBST(CARES_CFLAGS)
-AC_SUBST(CARES_LIBS)
-AM_CONDITIONAL(CARES, test "${enable_cares}" != "no")
+AC_ARG_ENABLE(sailfish-bt, AC_HELP_STRING([--enable-sailfish-bt],
+			[enable Sailfish OS Bluetooth plugin]),
+					[enable_sailfish_bt=${enableval}])
+AM_CONDITIONAL(SAILFISH_BT, test "${enable_sailfish_bt}" = "yes")
 
-AC_ARG_ENABLE(accounts-settings, AC_HELP_STRING([--disable-accounts-settings],
-			[disable using accounts service for system settings]),
-					[enable_accounts_settings=${enableval}])
-if (test "${enable_accounts_settings=$}" != "no"); then
-	PKG_CHECK_MODULES(SYSTEMD, libsystemd, dummy=yes,
-					AC_MSG_ERROR(libsystemd is required))
-fi
-AC_SUBST(SYSTEMD_CFLAGS)
-AC_SUBST(SYSTEMD_LIBS)
-AM_CONDITIONAL(ACCOUNTSSETTINGS, test "${enable_accounts_settings=$}" != "no")
+AC_ARG_ENABLE(sailfish-provision, AC_HELP_STRING([--enable-sailfish-provision],
+			[enable Sailfish OS provisioning plugin]),
+				[enable_sailfish_provision=${enableval}])
+AM_CONDITIONAL(SAILFISH_PROVISION, test "${enable_sailfish_provision=$}" = "yes")
 
 AC_ARG_ENABLE(nettime, AC_HELP_STRING([--disable-nettime],
                                 [disable Nettime plugin]),
                                         [enable_nettime=${enableval}])
+if (test "${enable_nettime}" != "no"); then
+	AC_SEARCH_LIBS([clock_gettime], [rt])
+fi
 AM_CONDITIONAL(NETTIME, test "${enable_nettime}" != "no")
 
 AC_ARG_WITH([provisiondb], AC_HELP_STRING([--with-provisiondb=FILE],
@@ -250,6 +297,38 @@ AC_ARG_ENABLE(datafiles, AC_HELP_STRING([--disable-datafiles],
 					[enable_datafiles=${enableval}])
 AM_CONDITIONAL(DATAFILES, test "${enable_datafiles}" != "no")
 
+AC_ARG_ENABLE(sailfish-pushforwarder, AC_HELP_STRING([--enable-sailfish-pushforwarder],
+			[enable Sailfish OS push forwarder plugin]),
+			[enable_sailfish_pushforwarder=${enableval}],
+			[enable_sailfish_pushforwarder="no"])
+AM_CONDITIONAL(SAILFISH_PUSHFORWARDER, test "${enable_sailfish_pushforwarder}" != "no")
+if (test "${enable_sailfish_pushforwarder}" != "no"); then
+	PKG_CHECK_MODULES(GLIBUTIL, libglibutil >= 1.0.15, dummy=yes,
+			AC_MSG_ERROR(libglibutil >= 1.0.15 is required))
+	PKG_CHECK_MODULES(WSPCODEC, libwspcodec >= 2.0, dummy=yes,
+			AC_MSG_ERROR(WSP decoder is required))
+	CFLAGS="$CFLAGS $WSPCODEC_CFLAGS"
+	LIBS="$LIBS $WSPCODEC_LIBS"
+	need_glibutil=yes
+fi
+
+AC_ARG_ENABLE(sailfish-debuglog, AC_HELP_STRING([--enable-sailfish-debuglog],
+			[enable Sailfish OS debug log plugin]),
+			[enable_sailfish_debuglog=${enableval}],
+			[enable_sailfish_debuglog="no"])
+AM_CONDITIONAL(SAILFISH_DEBUGLOG, test "${enable_sailfish_debuglog}" != "no")
+if (test "${enable_sailfish_debuglog}" = "yes"); then
+	PKG_CHECK_MODULES(DBUSLOG, libdbuslogserver-dbus, dummy=yes,
+				AC_MSG_ERROR(libdbuslogserver-dbus is required))
+	CFLAGS="$CFLAGS $DBUSLOG_CFLAGS"
+	LIBS="$LIBS $DBUSLOG_LIBS"
+fi
+
+if (test "${need_glibutil}" = "yes"); then
+	CFLAGS="$CFLAGS $GLIBUTIL_CFLAGS"
+	LIBS="$LIBS $GLIBUTIL_LIBS"
+fi
+
 if (test "${prefix}" = "NONE"); then
 	dnl no prefix and no localstatedir, so default to /var
 	if (test "$localstatedir" = '${prefix}/var'); then
@@ -264,7 +343,7 @@ if (test "$localstatedir" = '${prefix}/var'); then
 else
 	storagedir="${localstatedir}/lib/ofono"
 fi
-AC_DEFINE_UNQUOTED(STORAGEDIR, "${storagedir}",
+AC_DEFINE_UNQUOTED(DEFAULT_STORAGEDIR, "${storagedir}",
 			[Directory for the storage files])
 
 if (test "$sysconfdir" = '${prefix}/etc'); then

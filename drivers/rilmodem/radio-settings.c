@@ -30,80 +30,62 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
-#include <stdint.h>
 
 #include <glib.h>
 
-#include <ofono.h>
 #include <ofono/log.h>
 #include <ofono/modem.h>
 #include <ofono/radio-settings.h>
 
 #include "gril.h"
 
-#include "rilutil.h"
 #include "rilmodem.h"
 
-#include "grilrequest.h"
-#include "grilreply.h"
-#include "radio-settings.h"
+/* Preferred network types */
+#define PREF_NET_TYPE_GSM_WCDMA 0
+#define PREF_NET_TYPE_GSM_ONLY 1
+#define PREF_NET_TYPE_WCDMA 2
+#define PREF_NET_TYPE_GSM_WCDMA_AUTO 3
+#define PREF_NET_TYPE_CDMA_EVDO_AUTO 4
+#define PREF_NET_TYPE_CDMA_ONLY 5
+#define PREF_NET_TYPE_EVDO_ONLY 6
+#define PREF_NET_TYPE_GSM_WCDMA_CDMA_EVDO_AUTO 7
+#define PREF_NET_TYPE_LTE_CDMA_EVDO 8
+#define PREF_NET_TYPE_LTE_GSM_WCDMA 9
+#define PREF_NET_TYPE_LTE_CMDA_EVDO_GSM_WCDMA 10
+#define PREF_NET_TYPE_LTE_ONLY 11
+#define PREF_NET_TYPE_LTE_WCDMA 12
+/* MTK specific network types */
+#define MTK_PREF_NET_TYPE_BASE 30
+#define MTK_PREF_NET_TYPE_LTE_GSM_WCDMA (MTK_PREF_NET_TYPE_BASE + 1)
+#define MTK_PREF_NET_TYPE_LTE_GSM_WCDMA_MMDC (MTK_PREF_NET_TYPE_BASE + 2)
+#define MTK_PREF_NET_TYPE_GSM_WCDMA_LTE (MTK_PREF_NET_TYPE_BASE + 3)
+#define MTK_PREF_NET_TYPE_GSM_WCDMA_LTE_MMDC (MTK_PREF_NET_TYPE_BASE + 4)
+#define MTK_PREF_NET_TYPE_LTE_GSM_TYPE (MTK_PREF_NET_TYPE_BASE + 5)
+#define MTK_PREF_NET_TYPE_LTE_GSM_MMDC_TYPE (MTK_PREF_NET_TYPE_BASE + 6)
 
-struct radio_data *radio_data_0;
-struct radio_data *radio_data_1;
+/*GSM Band*/
+#define PREF_NET_BAND_GSM_AUTOMATIC 255
+#define PREF_NET_BAND_GSM850 6
+#define PREF_NET_BAND_GSM900_P 1
+#define PREF_NET_BAND_GSM900_E 2
+#define PREF_NET_BAND_GSM1800 4
+#define PREF_NET_BAND_GSM1900 5
 
-static int g_session;
+/*UMTS Band*/
+#define PREF_NET_BAND_UMTS_AUTOMATIC 255
+#define PREF_NET_BAND_UMTS_V 54
+#define PREF_NET_BAND_UMTS_VIII 57
+#define PREF_NET_BAND_UMTS_IV 53
+#define PREF_NET_BAND_UMTS_II 51
+#define PREF_NET_BAND_UMTS_I 50
 
-static struct radio_data *radio_data_complement(struct radio_data *rd)
-{
-	if (rd == radio_data_0)
-		return radio_data_1;
-	else
-		return radio_data_0;
-}
-
-static void set_ia_apn_cb(struct ril_msg *message, gpointer user_data)
-{
-	struct ofono_radio_settings *rs = user_data;
-	struct radio_data *rd = ofono_radio_settings_get_data(rs);
-
-	if (message->error != RIL_E_SUCCESS) {
-		ofono_error("%s: reply failure: %s", __func__,
-				ril_error_to_string(message->error));
-		return;
-	}
-
-	g_ril_print_response_no_args(rd->ril, message);
-}
-
-static void set_ia_apn(struct ofono_radio_settings *rs)
-{
-	char mccmnc[OFONO_MAX_MCC_LENGTH + OFONO_MAX_MNC_LENGTH + 1];
-	struct radio_data *rd = ofono_radio_settings_get_data(rs);
-	struct parcel rilp;
-	struct ofono_gprs *gprs;
-	const struct ofono_gprs_primary_context *ia_ctx;
-
-	if ((rd->available_rats & OFONO_RADIO_ACCESS_MODE_LTE) == 0)
-		return;
-
-	gprs = __ofono_atom_find(OFONO_ATOM_TYPE_GPRS, rd->modem);
-	if (gprs == NULL)
-		return;
-
-	/* Ask for APN data */
-	ia_ctx = ofono_gprs_get_ia_apn(gprs, mccmnc);
-	if (ia_ctx == NULL)
-		return;
-
-	g_ril_request_set_initial_attach_apn(rd->ril, ia_ctx->apn,
-						ia_ctx->proto, ia_ctx->username,
-						ia_ctx->password, mccmnc,
-						&rilp);
-
-	if (g_ril_send(rd->ril, RIL_REQUEST_SET_INITIAL_ATTACH_APN,
-			&rilp, set_ia_apn_cb, rs, NULL) == 0)
-		ofono_error("%s: failure sending request", __func__);
-}
+struct radio_data {
+	GRil *ril;
+	gboolean fast_dormancy;
+	gboolean pending_fd;
+	unsigned int vendor;
+};
 
 static void ril_set_rat_cb(struct ril_msg *message, gpointer user_data)
 {
@@ -113,13 +95,7 @@ static void ril_set_rat_cb(struct ril_msg *message, gpointer user_data)
 	ofono_radio_settings_rat_mode_set_cb_t cb = cbd->cb;
 
 	if (message->error == RIL_E_SUCCESS) {
-		rd->rat_mode = rd->pending_mode;
-
 		g_ril_print_response_no_args(rd->ril, message);
-
-		if (rd->rat_mode == OFONO_RADIO_ACCESS_MODE_LTE)
-			set_ia_apn(rs);
-
 		CALLBACK_WITH_SUCCESS(cb, cbd->data);
 	} else {
 		ofono_error("%s: rat mode setting failed", __func__);
@@ -127,12 +103,15 @@ static void ril_set_rat_cb(struct ril_msg *message, gpointer user_data)
 	}
 }
 
-static void set_preferred_network(struct radio_data *rd, struct cb_data *cbd,
-					enum ofono_radio_access_mode mode)
+static void ril_set_rat_mode(struct ofono_radio_settings *rs,
+			enum ofono_radio_access_mode mode,
+			ofono_radio_settings_rat_mode_set_cb_t cb,
+			void *data)
 {
-	ofono_radio_settings_rat_mode_set_cb_t cb = cbd->cb;
+	struct radio_data *rd = ofono_radio_settings_get_data(rs);
+	struct cb_data *cbd = cb_data_new(cb, data, rs);
 	struct parcel rilp;
-	int pref = PREF_NET_TYPE_GSM_WCDMA;
+	int pref = PREF_NET_TYPE_LTE_GSM_WCDMA;
 
 	switch (mode) {
 	case OFONO_RADIO_ACCESS_MODE_ANY:
@@ -149,338 +128,17 @@ static void set_preferred_network(struct radio_data *rd, struct cb_data *cbd,
 		break;
 	}
 
-	rd->pending_mode = mode;
-
-	g_ril_request_set_preferred_network_type(rd->ril, pref, &rilp);
-
-	if (g_ril_send(rd->ril, RIL_REQUEST_SET_PREFERRED_NETWORK_TYPE,
-				&rilp, ril_set_rat_cb, cbd, g_free) == 0) {
-		ofono_error("%s: unable to set rat mode", __func__);
-		g_free(cbd);
-		CALLBACK_WITH_FAILURE(cb, cbd->data);
-	}
-}
-
-static gboolean send_set_radio_cap(struct radio_data *rd,
-					int session, int phase, int ril_rats,
-					const char *logical_modem, int status,
-					GRilResponseFunc cb)
-{
-	struct parcel rilp;
-	int version = 1;
-
 	parcel_init(&rilp);
 
-	parcel_w_int32(&rilp, version);
-	parcel_w_int32(&rilp, session);
-	parcel_w_int32(&rilp, phase);
-	parcel_w_int32(&rilp, ril_rats);
-	parcel_w_string(&rilp, logical_modem);
-	parcel_w_int32(&rilp, status);
+	parcel_w_int32(&rilp, 1);	/* Number of params */
+	parcel_w_int32(&rilp, pref);
 
-	g_ril_append_print_buf(rd->ril, "(%d,%d,%d,0x%X,%s,%d)", version,
-			session, phase, ril_rats, logical_modem, status);
+	g_ril_append_print_buf(rd->ril, "(%d)", pref);
 
-	if (g_ril_send(rd->ril, RIL_REQUEST_SET_RADIO_CAPABILITY,
-						&rilp, cb, rd, NULL) == 0)
-		return FALSE;
-
-	return TRUE;
-}
-
-static unsigned set_rat_from_ril_rat(int ril_rat)
-{
-	unsigned rat = 0;
-
-	if (ril_rat & RIL_RAF_GSM)
-		rat |= OFONO_RADIO_ACCESS_MODE_GSM;
-
-	if (ril_rat & (RIL_RAF_UMTS | RIL_RAF_TD_SCDMA))
-		rat |= OFONO_RADIO_ACCESS_MODE_UMTS;
-
-	if (ril_rat & RIL_RAF_LTE)
-		rat |= OFONO_RADIO_ACCESS_MODE_LTE;
-
-	return rat;
-}
-
-static void set_preferred_cb(const struct ofono_error *error, void *data)
-{
-	struct radio_data *rd = data;
-
-	if (error->type != OFONO_ERROR_TYPE_NO_ERROR) {
-		ofono_error("%s: error setting radio access mode", __func__);
-
-		return;
-	}
-
-	ofono_radio_settings_set_rat_mode(rd->radio_settings, rd->rat_mode);
-}
-
-static enum ofono_radio_access_mode
-				get_best_available_tech(unsigned available_rats)
-{
-	int i;
-	uint32_t tech;
-
-	for (i = sizeof(uint32_t) * CHAR_BIT; i > 0; i--) {
-		tech = 1 << (i - 1);
-
-		if ((available_rats & tech) != 0)
-			break;
-	}
-
-	if (i == 0)
-		tech = OFONO_RADIO_ACCESS_MODE_GSM;
-
-	return tech;
-}
-
-static void switch_finish_cb(struct ril_msg *message, gpointer user_data)
-{
-	struct radio_data *rd = user_data;
-	struct switch_data *sd = rd->switch_d;
-	struct radio_data *rd1 = sd->rd_1;
-	struct radio_data *rd2 = sd->rd_2;
-	struct reply_radio_capability *caps;
-
-	sd->pending_msgs--;
-
-	if (message->error != RIL_E_SUCCESS) {
-		ofono_error("%s: error %s", __func__,
-				ril_error_to_string(message->error));
-		return;
-	}
-
-	caps = g_ril_reply_parse_get_radio_capability(rd->ril, message);
-	if (caps == NULL) {
-		ofono_error("%s: parse error", __func__);
-		return;
-	}
-
-	if (sd->pending_msgs != 0)
+	if (g_ril_send(rd->ril, RIL_REQUEST_SET_PREFERRED_NETWORK_TYPE,
+				&rilp, ril_set_rat_cb, cbd, g_free) > 0)
 		return;
 
-	ofono_info("Switching radio caps between slots - FINISH");
-
-	set_preferred_network(rd1, sd->cbd, sd->mode_to_switch);
-
-	/*
-	 * If the complementary slot does not support anymore its current
-	 * technology, we change it to the best possible among available ones.
-	 */
-	if ((rd2->rat_mode & rd2->available_rats) == 0) {
-
-		struct cb_data *cbd =
-			cb_data_new(set_preferred_cb, rd2, rd2->radio_settings);
-
-		set_preferred_network(rd2, cbd,
-				get_best_available_tech(rd2->available_rats));
-	}
-
-	rd1->switch_d = NULL;
-	rd2->switch_d = NULL;
-	g_free(sd);
-	g_free(caps);
-}
-
-static void radio_caps_event(struct ril_msg *message, gpointer user_data)
-{
-	struct radio_data *rd = user_data;
-	struct switch_data *sd = rd->switch_d;
-	struct radio_data *rd1;
-	struct radio_data *rd2;
-	struct reply_radio_capability *caps;
-
-	if (sd == NULL)
-		return;
-
-	rd1 = sd->rd_1;
-	rd2 = sd->rd_2;
-
-	caps = g_ril_reply_parse_get_radio_capability(rd->ril, message);
-	if (caps == NULL) {
-		ofono_error("%s: parse error", __func__);
-		return;
-	}
-
-	/*
-	 * Update rats. They come also in the replies to SET_RADIO_CAPABILITY,
-	 * but those seem to be unreliable, at least for midori.
-	 */
-	rd->ril_rats = caps->rat;
-	rd->available_rats = set_rat_from_ril_rat(caps->rat);
-
-	strcpy(rd->modem_uuid, caps->modem_uuid);
-
-	sd->pending_msgs--;
-
-	if (sd->pending_msgs != 0)
-		return;
-
-	DBG("Sending requests for FINISH phase");
-
-	send_set_radio_cap(rd1, g_session, RIL_RC_PHASE_FINISH,
-				rd1->ril_rats, rd1->modem_uuid,
-				RIL_RC_STATUS_SUCCESS, switch_finish_cb);
-	send_set_radio_cap(rd2, g_session, RIL_RC_PHASE_FINISH,
-				rd2->ril_rats, rd2->modem_uuid,
-				RIL_RC_STATUS_SUCCESS, switch_finish_cb);
-	sd->pending_msgs = 2;
-
-	g_free(caps);
-}
-
-/*
- * This function is just for completeness, as we actually need to wait for the
- * unsolocited events to continue the capabilities switch.
- */
-static void switch_apply_cb(struct ril_msg *message, gpointer user_data)
-{
-	struct radio_data *rd = user_data;
-	struct reply_radio_capability *caps;
-
-	if (message->error != RIL_E_SUCCESS) {
-		ofono_error("%s: error %s", __func__,
-				ril_error_to_string(message->error));
-		return;
-	}
-
-	caps = g_ril_reply_parse_get_radio_capability(rd->ril, message);
-	if (caps == NULL)
-		ofono_error("%s: parse error", __func__);
-
-	g_free(caps);
-}
-
-static void switch_start_cb(struct ril_msg *message, gpointer user_data)
-{
-	struct radio_data *rd = user_data;
-	struct switch_data *sd = rd->switch_d;
-	struct radio_data *rd1 = sd->rd_1;
-	struct radio_data *rd2 = sd->rd_2;
-	struct reply_radio_capability *caps;
-
-	sd->pending_msgs--;
-
-	if (message->error != RIL_E_SUCCESS) {
-		ofono_error("%s: error %s", __func__,
-				ril_error_to_string(message->error));
-		return;
-	}
-
-	caps = g_ril_reply_parse_get_radio_capability(rd->ril, message);
-	if (caps == NULL) {
-		ofono_error("%s: parse error", __func__);
-		return;
-	}
-
-	if (sd->pending_msgs != 0)
-		return;
-
-	DBG("Sending requests for APPLY phase");
-
-	send_set_radio_cap(rd1, g_session, RIL_RC_PHASE_APPLY,
-				rd2->ril_rats, rd2->modem_uuid,
-				RIL_RC_STATUS_NONE, switch_apply_cb);
-	send_set_radio_cap(rd2, g_session, RIL_RC_PHASE_APPLY,
-				rd1->ril_rats, rd1->modem_uuid,
-				RIL_RC_STATUS_NONE, switch_apply_cb);
-	sd->pending_msgs = 2;
-
-	g_free(caps);
-}
-
-static void switch_caps(struct switch_data *sd)
-{
-	struct radio_data *rd1 = sd->rd_1;
-	struct radio_data *rd2 = sd->rd_2;
-
-	/* START phase */
-	g_session++;
-
-	send_set_radio_cap(rd1, g_session, RIL_RC_PHASE_START,
-				rd1->ril_rats, rd1->modem_uuid,
-				RIL_RC_STATUS_NONE, switch_start_cb);
-	send_set_radio_cap(rd2, g_session, RIL_RC_PHASE_START,
-				rd2->ril_rats, rd2->modem_uuid,
-				RIL_RC_STATUS_NONE, switch_start_cb);
-	sd->pending_msgs = 2;
-}
-
-static void get_rs_with_mode(struct ofono_modem *modem, void *data)
-{
-	struct switch_data *sd = data;
-	struct radio_data *rd_ref = sd->rd_1;
-	struct ofono_atom *atom;
-	struct ofono_radio_settings *rs;
-	struct radio_data *rd;
-	const char *standby_group, *modem_group;
-
-	atom = __ofono_modem_find_atom(modem, OFONO_ATOM_TYPE_RADIO_SETTINGS);
-	if (atom == NULL)
-		return;
-
-	rs = __ofono_atom_get_data(atom);
-	rd = ofono_radio_settings_get_data(rs);
-	if (rd == rd_ref)
-		return;
-
-	standby_group = ofono_modem_get_string(rd_ref->modem, "StandbyGroup");
-	if (standby_group == NULL)
-		return;
-
-	modem_group = ofono_modem_get_string(modem, "StandbyGroup");
-	if (g_strcmp0(standby_group, modem_group) != 0)
-		return;
-
-	if ((rd->available_rats & sd->mode_to_switch) == 0)
-		return;
-
-	sd->rd_2 = rd;
-}
-
-void ril_set_rat_mode(struct ofono_radio_settings *rs,
-			enum ofono_radio_access_mode mode,
-			ofono_radio_settings_rat_mode_set_cb_t cb,
-			void *data)
-{
-	struct radio_data *rd = ofono_radio_settings_get_data(rs);
-	struct cb_data *cbd = cb_data_new(cb, data, rs);
-	struct switch_data *sd = NULL;
-
-	if (rd->switch_d != NULL)
-		goto error;
-
-	if ((rd->available_rats & mode) == 0) {
-		if (g_ril_get_version(rd->ril) < 11)
-			goto error;
-
-		/* Check if we can switch rats with other slot */
-		sd = g_malloc0(sizeof (*sd));
-		sd->rd_1 = rd;
-		sd->mode_to_switch = mode;
-		sd->cbd = cbd;
-
-		__ofono_modem_foreach(get_rs_with_mode, sd);
-
-		if (sd->rd_2 == NULL)
-			goto error;
-
-		ofono_info("Switching radio caps between slots - START");
-		sd->rd_1->switch_d = sd;
-		sd->rd_2->switch_d = sd;
-
-		switch_caps(sd);
-	} else {
-		set_preferred_network(rd, cbd, mode);
-	}
-
-	return;
-
-error:
-	ofono_error("%s: unable to set rat mode", __func__);
-	g_free(sd);
 	g_free(cbd);
 	CALLBACK_WITH_FAILURE(cb, data);
 }
@@ -491,17 +149,45 @@ static void ril_rat_mode_cb(struct ril_msg *message, gpointer user_data)
 	ofono_radio_settings_rat_mode_query_cb_t cb = cbd->cb;
 	struct ofono_radio_settings *rs = cbd->user;
 	struct radio_data *rd = ofono_radio_settings_get_data(rs);
-	int mode, pref;
+	int mode;
+	struct parcel rilp;
+	int net_type;
 
-	if (message->error != RIL_E_SUCCESS) {
-		ofono_error("%s: error %s", __func__,
-				ril_error_to_string(message->error));
+	if (message->error != RIL_E_SUCCESS)
 		goto error;
+
+	g_ril_init_parcel(message, &rilp);
+	if (parcel_r_int32(&rilp) != 1)
+		goto error;
+
+	net_type = parcel_r_int32(&rilp);
+
+	if (rilp.malformed)
+		goto error;
+
+	g_ril_append_print_buf(rd->ril, "{%d}", net_type);
+	g_ril_print_response(rd->ril, message);
+
+	/* Try to translate special MTK settings */
+	if (g_ril_vendor(rd->ril) == OFONO_RIL_VENDOR_MTK) {
+		switch (net_type) {
+		/* 4G preferred */
+		case MTK_PREF_NET_TYPE_LTE_GSM_WCDMA:
+		case MTK_PREF_NET_TYPE_LTE_GSM_WCDMA_MMDC:
+		case MTK_PREF_NET_TYPE_LTE_GSM_TYPE:
+		case MTK_PREF_NET_TYPE_LTE_GSM_MMDC_TYPE:
+			net_type = PREF_NET_TYPE_LTE_GSM_WCDMA;
+			break;
+		/* 3G or 2G preferred over LTE */
+		case MTK_PREF_NET_TYPE_GSM_WCDMA_LTE:
+		case MTK_PREF_NET_TYPE_GSM_WCDMA_LTE_MMDC:
+			net_type = PREF_NET_TYPE_GSM_WCDMA;
+			break;
+		}
 	}
 
-	pref = g_ril_reply_parse_get_preferred_network_type(rd->ril, message);
-	if (pref < 0) {
-		ofono_error("%s: parse error", __func__);
+	if (net_type < 0 || net_type > PREF_NET_TYPE_LTE_ONLY) {
+		ofono_error("%s: unknown network type", __func__);
 		goto error;
 	}
 
@@ -511,8 +197,8 @@ static void ril_rat_mode_cb(struct ril_msg *message, gpointer user_data)
 	 * This value is returned when selecting the slot as having 3G
 	 * capabilities, so it is sort of the default for MTK modems.
 	 */
-
-	switch (pref) {
+	switch (net_type) {
+	case PREF_NET_TYPE_WCDMA:
 	case PREF_NET_TYPE_GSM_WCDMA:
 	case PREF_NET_TYPE_GSM_WCDMA_AUTO:
 		mode = OFONO_RADIO_ACCESS_MODE_UMTS;
@@ -525,30 +211,19 @@ static void ril_rat_mode_cb(struct ril_msg *message, gpointer user_data)
 		break;
 	default:
 		ofono_error("%s: Unexpected preferred network type (%d)",
-				__func__, pref);
+				__func__, net_type);
 		mode = OFONO_RADIO_ACCESS_MODE_ANY;
 		break;
 	}
 
-	rd->rat_mode = mode;
-
 	CALLBACK_WITH_SUCCESS(cb, mode, cbd->data);
-
 	return;
 
 error:
-	/*
-	 * If error, we assume GSM. This is preferable to not being able to
-	 * access the radio settings properties. Midori returns error if we
-	 * have not completed successfully a capability switch. This should
-	 * not happen if there are no bugs in our implementation, but it is
-	 * better to leave this here so system settings shows something that
-	 * can be manually changed by the user, just in case.
-	 */
-	CALLBACK_WITH_SUCCESS(cb, OFONO_RADIO_ACCESS_MODE_GSM, cbd->data);
+	CALLBACK_WITH_FAILURE(cb, -1, cbd->data);
 }
 
-void ril_query_rat_mode(struct ofono_radio_settings *rs,
+static void ril_query_rat_mode(struct ofono_radio_settings *rs,
 			ofono_radio_settings_rat_mode_query_cb_t cb,
 			void *data)
 {
@@ -556,14 +231,14 @@ void ril_query_rat_mode(struct ofono_radio_settings *rs,
 	struct cb_data *cbd = cb_data_new(cb, data, rs);
 
 	if (g_ril_send(rd->ril, RIL_REQUEST_GET_PREFERRED_NETWORK_TYPE,
-				NULL, ril_rat_mode_cb, cbd, g_free) == 0) {
-		ofono_error("%s: unable to send rat mode query", __func__);
-		g_free(cbd);
-		CALLBACK_WITH_FAILURE(cb, -1, data);
-	}
+				NULL, ril_rat_mode_cb, cbd, g_free) > 0)
+		return;
+
+	g_free(cbd);
+	CALLBACK_WITH_FAILURE(cb, -1, data);
 }
 
-void ril_query_fast_dormancy(struct ofono_radio_settings *rs,
+static void ril_query_fast_dormancy(struct ofono_radio_settings *rs,
 			ofono_radio_settings_fast_dormancy_query_cb_t cb,
 			void *data)
 {
@@ -590,7 +265,7 @@ static void ril_display_state_cb(struct ril_msg *message, gpointer user_data)
 	}
 }
 
-void ril_set_fast_dormancy(struct ofono_radio_settings *rs,
+static void ril_set_fast_dormancy(struct ofono_radio_settings *rs,
 				ofono_bool_t enable,
 				ofono_radio_settings_fast_dormancy_set_cb_t cb,
 				void *data)
@@ -599,196 +274,168 @@ void ril_set_fast_dormancy(struct ofono_radio_settings *rs,
 	struct cb_data *cbd = cb_data_new(cb, data, rs);
 	struct parcel rilp;
 
-	g_ril_request_screen_state(rd->ril, enable ? 0 : 1, &rilp);
+	parcel_init(&rilp);
+	parcel_w_int32(&rilp, 1);	/* Number of params */
+	parcel_w_int32(&rilp, enable);
+
+	g_ril_append_print_buf(rd->ril, "(%d)", enable);
 
 	rd->pending_fd = enable;
 
 	if (g_ril_send(rd->ril, RIL_REQUEST_SCREEN_STATE, &rilp,
-			ril_display_state_cb, cbd, g_free) <= 0) {
-		g_free(cbd);
-		CALLBACK_WITH_FAILURE(cb, data);
-	}
-}
-
-static ofono_bool_t query_available_rats_cb(gpointer user_data)
-{
-	struct cb_data *cbd = user_data;
-	ofono_radio_settings_available_rats_query_cb_t cb = cbd->cb;
-	struct ofono_radio_settings *rs = cbd->user;
-	struct radio_data *rd = ofono_radio_settings_get_data(rs);
-
-	rd->available_rats = OFONO_RADIO_ACCESS_MODE_GSM
-						| OFONO_RADIO_ACCESS_MODE_UMTS;
-
-	if (getenv("OFONO_RIL_RAT_LTE") != NULL)
-		rd->available_rats |= OFONO_RADIO_ACCESS_MODE_LTE;
-
-	CALLBACK_WITH_SUCCESS(cb, rd->available_rats, cbd->data);
+			ril_display_state_cb, cbd, g_free) > 0)
+		return;
 
 	g_free(cbd);
-
-	return FALSE;
+	CALLBACK_WITH_FAILURE(cb, data);
 }
 
-static void get_radio_caps_cb(struct ril_msg *message, gpointer user_data)
-{
-	struct cb_data *cbd = user_data;
-	ofono_radio_settings_available_rats_query_cb_t cb = cbd->cb;
-	struct ofono_radio_settings *rs = cbd->user;
-	struct radio_data *rd = ofono_radio_settings_get_data(rs);
-	struct radio_data *rd_comp;
-	struct reply_radio_capability *caps;
-	unsigned all_rats;
-
-	if (message->error != RIL_E_SUCCESS) {
-		ofono_error("%s: error %s", __func__,
-				ril_error_to_string(message->error));
-		CALLBACK_WITH_FAILURE(cb, 0, cbd->data);
-		return;
-	}
-
-	caps = g_ril_reply_parse_get_radio_capability(rd->ril, message);
-	if (caps == NULL) {
-		ofono_error("%s: parse error", __func__);
-		CALLBACK_WITH_FAILURE(cb, 0, cbd->data);
-		return;
-	}
-
-	rd->ril_rats = caps->rat;
-	rd->available_rats = set_rat_from_ril_rat(caps->rat);
-
-	strcpy(rd->modem_uuid, caps->modem_uuid);
-
-	g_free(caps);
-
-	/* We show all rats, as we can switch the ownership between slots */
-	all_rats = rd->available_rats;
-
-	rd_comp = radio_data_complement(rd);
-	if (rd_comp != NULL)
-		all_rats |= rd_comp->available_rats;
-
-	CALLBACK_WITH_SUCCESS(cb, all_rats, cbd->data);
-}
-
-void ril_query_available_rats(struct ofono_radio_settings *rs,
+static void ril_query_available_rats(struct ofono_radio_settings *rs,
 			ofono_radio_settings_available_rats_query_cb_t cb,
 			void *data)
 {
+	unsigned int available_rats;
+	struct ofono_modem *modem = ofono_radio_settings_get_modem(rs);
+
+	available_rats = OFONO_RADIO_ACCESS_MODE_GSM
+				| OFONO_RADIO_ACCESS_MODE_UMTS;
+
+	if (ofono_modem_get_boolean(modem, MODEM_PROP_LTE_CAPABLE))
+		available_rats |= OFONO_RADIO_ACCESS_MODE_LTE;
+
+	CALLBACK_WITH_SUCCESS(cb, available_rats, data);
+}
+
+static void ril_set_band_cb(struct ril_msg *message, gpointer user_data)
+{
+	struct cb_data *cbd = user_data;
+	struct ofono_radio_settings *rs = cbd->user;
+	struct radio_data *rd = ofono_radio_settings_get_data(rs);
+	ofono_radio_settings_band_set_cb_t cb = cbd->cb;
+
+	if (message->error == RIL_E_SUCCESS) {
+		g_ril_print_response_no_args(rd->ril, message);
+
+		CALLBACK_WITH_SUCCESS(cb, cbd->data);
+	} else {
+		CALLBACK_WITH_FAILURE(cb, cbd->data);
+	}
+}
+
+static void ril_sofia3gr_set_band(struct ofono_radio_settings *rs,
+					enum ofono_radio_band_gsm band_gsm,
+					enum ofono_radio_band_umts band_umts,
+					ofono_radio_settings_band_set_cb_t cb,
+					void *data)
+{
 	struct radio_data *rd = ofono_radio_settings_get_data(rs);
 	struct cb_data *cbd = cb_data_new(cb, data, rs);
+	struct parcel rilp;
+	char cmd_buf[9], gsm_band[4], umts_band[4];
+	/* RIL_OEM_HOOK_STRING_SET_BAND_PREFERENCE = 0x000000CE */
+	int cmd_id = 0x000000CE;
+	sprintf(cmd_buf, "%d", cmd_id);
 
-	if (g_ril_get_version(rd->ril) < 11) {
-		g_idle_add(query_available_rats_cb, cbd);
+	switch (band_gsm) {
+	case OFONO_RADIO_BAND_GSM_ANY:
+		sprintf(gsm_band, "%d", PREF_NET_BAND_GSM_AUTOMATIC);
+		break;
+	case OFONO_RADIO_BAND_GSM_850:
+		sprintf(gsm_band, "%d", PREF_NET_BAND_GSM850);
+		break;
+	case OFONO_RADIO_BAND_GSM_900P:
+		sprintf(gsm_band, "%d", PREF_NET_BAND_GSM900_P);
+		break;
+	case OFONO_RADIO_BAND_GSM_900E:
+		sprintf(gsm_band, "%d", PREF_NET_BAND_GSM900_E);
+		break;
+	case OFONO_RADIO_BAND_GSM_1800:
+		sprintf(gsm_band, "%d", PREF_NET_BAND_GSM1800);
+		break;
+	case OFONO_RADIO_BAND_GSM_1900:
+		sprintf(gsm_band, "%d", PREF_NET_BAND_GSM1900);
+		break;
+	default:
+		CALLBACK_WITH_FAILURE(cb,  data);
 		return;
 	}
 
-	if (g_ril_send(rd->ril, RIL_REQUEST_GET_RADIO_CAPABILITY, NULL,
-					get_radio_caps_cb, cbd, g_free) <= 0) {
-		g_free(cbd);
-		CALLBACK_WITH_FAILURE(cb, 0, data);
-	}
-}
-
-static void gprs_watch_cb(struct ofono_atom *atom,
-				enum ofono_atom_watch_condition cond,
-				void *data)
-{
-	struct ofono_radio_settings *rs = data;
-
-	if (cond != OFONO_ATOM_WATCH_CONDITION_REGISTERED)
-		return;
-
-	set_ia_apn(rs);
-}
-
-static void set_safe_preferred_cb(const struct ofono_error *error, void *data)
-{
-	if (error->type != OFONO_ERROR_TYPE_NO_ERROR) {
-		ofono_error("%s: error setting radio access mode", __func__);
-
+	switch (band_umts) {
+	case OFONO_RADIO_BAND_UMTS_ANY:
+		sprintf(umts_band, "%d", PREF_NET_BAND_UMTS_AUTOMATIC);
+		break;
+	case OFONO_RADIO_BAND_UMTS_850:
+		sprintf(umts_band, "%d", PREF_NET_BAND_UMTS_V);
+		break;
+	case OFONO_RADIO_BAND_UMTS_900:
+		sprintf(umts_band, "%d", PREF_NET_BAND_UMTS_VIII);
+		break;
+	case OFONO_RADIO_BAND_UMTS_1700AWS:
+		sprintf(umts_band, "%d", PREF_NET_BAND_UMTS_IV);
+		break;
+	case OFONO_RADIO_BAND_UMTS_1900:
+		sprintf(umts_band, "%d", PREF_NET_BAND_UMTS_II);
+		break;
+	case OFONO_RADIO_BAND_UMTS_2100:
+		sprintf(umts_band, "%d", PREF_NET_BAND_UMTS_I);
+		break;
+	default:
+		CALLBACK_WITH_FAILURE(cb,  data);
 		return;
 	}
+
+	parcel_init(&rilp);
+	parcel_w_int32(&rilp, 3);	/* Number of params */
+	parcel_w_string(&rilp, cmd_buf);
+	parcel_w_string(&rilp, gsm_band);
+	parcel_w_string(&rilp, umts_band);
+
+	if (g_ril_send(rd->ril, RIL_REQUEST_OEM_HOOK_STRINGS, &rilp,
+			ril_set_band_cb, cbd, g_free) > 0)
+		return;
+
+	g_free(cbd);
+	CALLBACK_WITH_FAILURE(cb, data);
 }
 
-static void radio_settings_register(const struct ofono_error *error,
-					unsigned int available_rats,
-					void *data)
+static void ril_set_band(struct ofono_radio_settings *rs,
+			enum ofono_radio_band_gsm band_gsm,
+			enum ofono_radio_band_umts band_umts,
+			ofono_radio_settings_band_set_cb_t cb,
+			void *data)
 {
-	struct ofono_radio_settings *rs = data;
 	struct radio_data *rd = ofono_radio_settings_get_data(rs);
 
-	g_ril_register(rd->ril, RIL_UNSOL_RADIO_CAPABILITY,
-							radio_caps_event, rd);
-
-	rd->gprs_atom_watch =
-		__ofono_modem_add_atom_watch(rd->modem, OFONO_ATOM_TYPE_GPRS,
-						gprs_watch_cb, rs, NULL);
-
-	/*
-	 * If the preferred technology was unknown/unsupported, change to a
-	 * valid one (midori can return PREF_NET_TYPE_CDMA_ONLY, for instance).
-	 * Changing to anything above GSM can prevent other radios restoring
-	 * their settings.
-	 */
-	if (rd->rat_mode == OFONO_RADIO_ACCESS_MODE_ANY) {
-		struct cb_data *cbd = cb_data_new(set_safe_preferred_cb, rd,
-							rd->radio_settings);
-
-		set_preferred_network(rd, cbd, OFONO_RADIO_ACCESS_MODE_GSM);
+	switch (rd->vendor) {
+	case OFONO_RIL_VENDOR_IMC_SOFIA3GR:
+		ril_sofia3gr_set_band(rs, band_gsm, band_umts, cb, data);
+		return;
+	default:
+		break;
 	}
 
-	/*
-	 * We register in all cases, setting FD some times fails until radio is
-	 * available (this happens on turbo and maybe in other devices).
-	 */
-	ofono_radio_settings_register(rs);
+	CALLBACK_WITH_FAILURE(cb, data);
 }
 
-static void ril_after_query_rat_mode(const struct ofono_error *error,
-					enum ofono_radio_access_mode mode,
-					void *data)
-{
-	struct ofono_radio_settings *rs = data;
-	struct radio_data *rd = ofono_radio_settings_get_data(rs);
-
-	rd->virt_tbl->query_available_rats(rs, radio_settings_register, rs);
-}
-
-void ril_delayed_register(const struct ofono_error *error, void *user_data)
+static void ril_delayed_register(const struct ofono_error *error,
+							void *user_data)
 {
 	struct ofono_radio_settings *rs = user_data;
-	struct radio_data *rd = ofono_radio_settings_get_data(rs);
 
-	if (error->type != OFONO_ERROR_TYPE_NO_ERROR)
-		ofono_error("%s: cannot set default fast dormancy", __func__);
-
-	rd->radio_settings = rs;
-
-	if (ofono_modem_get_integer(rd->modem, "Slot") == 0)
-		radio_data_0 = rd;
+	if (error->type == OFONO_ERROR_TYPE_NO_ERROR)
+		ofono_radio_settings_register(rs);
 	else
-		radio_data_1 = rd;
-
-	rd->virt_tbl->query_rat_mode(rs, ril_after_query_rat_mode, rs);
+		ofono_error("%s: cannot set default fast dormancy", __func__);
 }
-
-static struct ofono_radio_settings_driver driver;
 
 static int ril_radio_settings_probe(struct ofono_radio_settings *rs,
 					unsigned int vendor, void *user)
 {
-	struct ril_radio_settings_driver_data *rs_init_data = user;
-	struct radio_data *rsd = g_try_new0(struct radio_data, 1);
+	GRil *ril = user;
+	struct radio_data *rsd = g_new0(struct radio_data, 1);
 
-	if (rsd == NULL) {
-		ofono_error("%s: cannot allocate memory", __func__);
-		return -ENOMEM;
-	}
-
-	rsd->virt_tbl = &driver;
-	rsd->ril = g_ril_clone(rs_init_data->gril);
-	rsd->modem = rs_init_data->modem;
+	rsd->ril = g_ril_clone(ril);
+	rsd->vendor = vendor;
 
 	ofono_radio_settings_set_data(rs, rsd);
 
@@ -797,14 +444,10 @@ static int ril_radio_settings_probe(struct ofono_radio_settings *rs,
 	return 0;
 }
 
-void ril_radio_settings_remove(struct ofono_radio_settings *rs)
+static void ril_radio_settings_remove(struct ofono_radio_settings *rs)
 {
 	struct radio_data *rd = ofono_radio_settings_get_data(rs);
-
 	ofono_radio_settings_set_data(rs, NULL);
-
-	if (rd->gprs_atom_watch)
-		__ofono_modem_remove_atom_watch(rd->modem, rd->gprs_atom_watch);
 
 	g_ril_unref(rd->ril);
 	g_free(rd);
@@ -816,6 +459,7 @@ static struct ofono_radio_settings_driver driver = {
 	.remove			= ril_radio_settings_remove,
 	.query_rat_mode		= ril_query_rat_mode,
 	.set_rat_mode		= ril_set_rat_mode,
+	.set_band		= ril_set_band,
 	.query_fast_dormancy	= ril_query_fast_dormancy,
 	.set_fast_dormancy	= ril_set_fast_dormancy,
 	.query_available_rats	= ril_query_available_rats

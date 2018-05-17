@@ -225,8 +225,7 @@ void bluetooth_parse_properties(DBusMessage *reply, const char *property, ...)
 	}
 
 done:
-	g_slist_foreach(prop_handlers, (GFunc) g_free, NULL);
-	g_slist_free(prop_handlers);
+	g_slist_free_full(prop_handlers, g_free);
 }
 
 static void parse_uuids(DBusMessageIter *array, gpointer user_data)
@@ -434,14 +433,6 @@ static void adapter_properties_cb(DBusPendingCall *call, gpointer user_data)
 		dbus_error_free(&derr);
 		goto done;
 	}
-
-	/*
-	 * Adapter might have been removed before the callback, for instance in
-	 * case the SIM state changes due to a modem reset (see
-	 * hfp_ag.c:sim_state_watch())
-	 */
-	if (adapter_address_hash == NULL)
-		goto done;
 
 	DBG("");
 
@@ -700,7 +691,7 @@ static void find_adapter_cb(DBusPendingCall *call, gpointer user_data)
 
 	adapter_any_path = g_strdup(path);
 
-	g_slist_foreach(server_list, (GFunc) add_record, NULL);
+	g_slist_foreach(server_list, add_record, NULL);
 
 done:
 	dbus_message_unref(reply);
@@ -828,7 +819,7 @@ static void bluetooth_disconnect(DBusConnection *conn, void *user_data)
 
 	g_hash_table_foreach(uuid_hash, bluetooth_remove, NULL);
 
-	g_slist_foreach(server_list, (GFunc) remove_service_handle, NULL);
+	g_slist_foreach(server_list, remove_service_handle, NULL);
 }
 
 static guint bluetooth_watch;
@@ -908,9 +899,7 @@ static void bluetooth_unref(void)
 	g_dbus_remove_watch(connection, property_watch);
 
 	g_hash_table_destroy(uuid_hash);
-	uuid_hash = NULL;
 	g_hash_table_destroy(adapter_address_hash);
-	adapter_address_hash = NULL;
 }
 
 void bluetooth_get_properties()

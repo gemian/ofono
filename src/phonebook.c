@@ -53,7 +53,7 @@ enum phonebook_number_type {
 };
 
 struct ofono_phonebook {
-	DBusMessage *pending;
+	GSList *pending;
 	int storage_index; /* go through all supported storage */
 	int flags;
 	GString *vcards; /* entries with vcard 3.0 format */
@@ -127,6 +127,7 @@ static void add_slash(char *dest, const char *src, int len_max, int len)
 		case ';':
 		case ',':
 			dest[j++] = '\\';
+			/* fall through */
 		default:
 			dest[j] = src[i];
 			break;
@@ -233,23 +234,28 @@ static void vcard_printf_end(GString *vcards)
 	vcard_printf(vcards, "");
 }
 
-static void print_number(struct phonebook_number *pn, GString *vcards)
+static void print_number(gpointer pointer, gpointer user_data)
 {
+	struct phonebook_number *pn = pointer;
+	GString *vcards = user_data;
 	vcard_printf_number(vcards, pn->number, pn->type, pn->category);
 }
 
-static void destroy_number(struct phonebook_number *pn)
+static void destroy_number(gpointer pointer)
 {
+	struct phonebook_number *pn = pointer;
 	g_free(pn->number);
 	g_free(pn);
 }
 
-static void print_merged_entry(struct phonebook_person *person, GString *vcards)
+static void print_merged_entry(gpointer pointer, gpointer user_data)
 {
+	struct phonebook_person *person = pointer;
+	GString *vcards = user_data;
 	vcard_printf_begin(vcards);
 	vcard_printf_text(vcards, person->text);
 
-	g_slist_foreach(person->number_list, (GFunc) print_number, vcards);
+	g_slist_foreach(person->number_list, print_number, vcards);
 
 	vcard_printf_group(vcards, person->group);
 	vcard_printf_email(vcards, person->email);
@@ -257,15 +263,15 @@ static void print_merged_entry(struct phonebook_person *person, GString *vcards)
 	vcard_printf_end(vcards);
 }
 
-static void destroy_merged_entry(struct phonebook_person *person)
+static void destroy_merged_entry(gpointer pointer)
 {
+	struct phonebook_person *person = pointer;
 	g_free(person->text);
 	g_free(person->group);
 	g_free(person->email);
 	g_free(person->sip_uri);
 
-	g_slist_foreach(person->number_list, (GFunc) destroy_number, NULL);
-	g_slist_free(person->number_list);
+	g_slist_free_full(person->number_list, destroy_number);
 
 	g_free(person);
 }
@@ -419,11 +425,9 @@ static void export_phonebook_cb(const struct ofono_error *error, void *data)
 
 	/* convert the collected entries that are already merged to vcard */
 	phonebook->merge_list = g_slist_reverse(phonebook->merge_list);
-	g_slist_foreach(phonebook->merge_list, (GFunc) print_merged_entry,
+	g_slist_foreach(phonebook->merge_list, print_merged_entry,
 				phonebook->vcards);
-	g_slist_foreach(phonebook->merge_list, (GFunc) destroy_merged_entry,
-				NULL);
-	g_slist_free(phonebook->merge_list);
+	g_slist_free_full(phonebook->merge_list, destroy_merged_entry);
 	phonebook->merge_list = NULL;
 
 	phonebook->storage_index++;
@@ -431,9 +435,24 @@ static void export_phonebook_cb(const struct ofono_error *error, void *data)
 	return;
 }
 
+static void phonebook_reply(gpointer data, gpointer user_data)
+{
+	DBusMessage *msg = data;
+	struct ofono_phonebook *phonebook = user_data;
+	DBusMessage *reply = generate_export_entries_reply(phonebook, msg);
+
+	__ofono_dbus_pending_reply(&msg, reply);
+}
+
+static void phonebook_cancel(gpointer data)
+{
+	DBusMessage *msg = data;
+
+	__ofono_dbus_pending_reply(&msg, __ofono_error_canceled(msg));
+}
+
 static void export_phonebook(struct ofono_phonebook *phonebook)
 {
-	DBusMessage *reply;
 	const char *pb = storage_support[phonebook->storage_index];
 
 	if (pb) {
@@ -442,13 +461,9 @@ static void export_phonebook(struct ofono_phonebook *phonebook)
 		return;
 	}
 
-	reply = generate_export_entries_reply(phonebook, phonebook->pending);
-	if (reply == NULL) {
-		dbus_message_unref(phonebook->pending);
-		return;
-	}
-
-	__ofono_dbus_pending_reply(&phonebook->pending, reply);
+	g_slist_foreach(phonebook->pending, phonebook_reply, phonebook);
+	g_slist_free(phonebook->pending);
+	phonebook->pending = NULL;
 	phonebook->flags |= PHONEBOOK_FLAG_CACHED;
 }
 
@@ -458,23 +473,22 @@ static DBusMessage *import_entries(DBusConnection *conn, DBusMessage *msg,
 	struct ofono_phonebook *phonebook = data;
 	DBusMessage *reply;
 
-	if (phonebook->pending) {
-		reply = __ofono_error_busy(phonebook->pending);
-		g_dbus_send_message(conn, reply);
-		return NULL;
-	}
-
 	if (phonebook->flags & PHONEBOOK_FLAG_CACHED) {
 		reply = generate_export_entries_reply(phonebook, msg);
 		g_dbus_send_message(conn, reply);
 		return NULL;
 	}
 
-	g_string_set_size(phonebook->vcards, 0);
-	phonebook->storage_index = 0;
-
-	phonebook->pending = dbus_message_ref(msg);
-	export_phonebook(phonebook);
+	if (phonebook->pending) {
+		phonebook->pending = g_slist_append(phonebook->pending,
+							dbus_message_ref(msg));
+	} else {
+		phonebook->pending = g_slist_append(NULL,
+							dbus_message_ref(msg));
+		g_string_set_size(phonebook->vcards, 0);
+		phonebook->storage_index = 0;
+		export_phonebook(phonebook);
+	}
 
 	return NULL;
 }
@@ -515,6 +529,11 @@ static void phonebook_unregister(struct ofono_atom *atom)
 	const char *path = __ofono_atom_get_path(pb->atom);
 	DBusConnection *conn = ofono_dbus_get_connection();
 	struct ofono_modem *modem = __ofono_atom_get_modem(pb->atom);
+
+	if (pb->pending) {
+		g_slist_free_full(pb->pending, phonebook_cancel);
+		pb->pending = NULL;
+	}
 
 	ofono_modem_remove_interface(modem, OFONO_PHONEBOOK_INTERFACE);
 	g_dbus_unregister_interface(conn, path, OFONO_PHONEBOOK_INTERFACE);

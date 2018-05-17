@@ -23,9 +23,9 @@
 #define RILUTIL_H
 
 #include <stdio.h>
-#include <modem.h>
-#include <sim.h>
-#include <gprs-context.h>
+#include <ofono/modem.h>
+#include <ofono/sim.h>
+#include <ofono/gprs-context.h>
 
 /* TODO: create a table lookup*/
 #define PREFIX_30_NETMASK "255.255.255.252"
@@ -67,35 +67,13 @@ enum at_util_charset {
 	RIL_UTIL_CHARSET_8859_H =	0x10000,
 };
 
-struct ril_sim_data {
-	struct ofono_modem *modem;
-	GRil *gril;
-	ofono_sim_state_event_cb_t ril_state_watch;
-};
-
-struct ril_gprs_context_data {
-	GRil *gril;
-	struct ofono_modem *modem;
-	enum ofono_gprs_context_type type;
-};
-
-struct ril_voicecall_driver_data {
-	GRil *gril;
-	struct ofono_modem *modem;
-};
-
-struct ril_gprs_driver_data {
-	GRil *gril;
-	struct ofono_modem *modem;
-};
-
-struct ril_radio_settings_driver_data {
-	GRil *gril;
-	struct ofono_modem *modem;
-};
+typedef void (*ril_util_sim_inserted_cb_t)(gboolean present, void *userdata);
 
 void decode_ril_error(struct ofono_error *error, const char *final);
 gchar *ril_util_get_netmask(const char *address);
+
+void ril_util_build_deactivate_data_call(GRil *gril, struct parcel *rilp,
+						int cid, unsigned int reason);
 
 struct cb_data {
 	void *cb;
@@ -114,6 +92,29 @@ static inline struct cb_data *cb_data_new(void *cb, void *data, void *user)
 
 	return ret;
 }
+
+static inline int ril_util_convert_signal_strength(int strength)
+{
+	int result;
+
+	if (strength == 99)
+		result = -1;
+	else
+		result = (strength * 100) / 31;
+
+	return result;
+}
+
+const char *ril_util_gprs_proto_to_ril_string(enum ofono_gprs_proto);
+
+int ril_util_registration_state_to_status(int reg_state);
+
+int ril_util_address_to_gprs_proto(const char *addr);
+
+#define DECLARE_FAILURE(e)			\
+	struct ofono_error e;			\
+	e.type = OFONO_ERROR_TYPE_FAILURE;	\
+	e.error = 0				\
 
 #define CALLBACK_WITH_FAILURE(cb, args...)		\
 	do {						\

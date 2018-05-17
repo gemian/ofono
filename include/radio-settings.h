@@ -79,6 +79,7 @@ typedef void (*ofono_radio_settings_fast_dormancy_query_cb_t)(
 						const struct ofono_error *error,
 						ofono_bool_t enable,
 						void *data);
+
 typedef void (*ofono_radio_settings_available_rats_query_cb_t)(
 						const struct ofono_error *error,
 						unsigned int available_rats,
@@ -132,8 +133,12 @@ void ofono_radio_settings_remove(struct ofono_radio_settings *rs);
 void ofono_radio_settings_set_data(struct ofono_radio_settings *rs, void *data);
 void *ofono_radio_settings_get_data(struct ofono_radio_settings *rs);
 
-void ofono_radio_settings_set_rat_mode(struct ofono_radio_settings *rs,
-					enum ofono_radio_access_mode mode);
+struct ofono_modem *ofono_radio_settings_get_modem(
+					struct ofono_radio_settings *rs);
+
+const char *ofono_radio_access_mode_to_string(enum ofono_radio_access_mode m);
+ofono_bool_t ofono_radio_access_mode_from_string(const char *str,
+					enum ofono_radio_access_mode *mode);
 
 #ifdef __cplusplus
 }

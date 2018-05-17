@@ -32,6 +32,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
+#include <string.h>
 
 #include <ofono/modem.h>
 #include <ofono/types.h>
@@ -41,6 +42,10 @@
 #include "common.h"
 #include "ril_constants.h"
 #include "rilmodem-test-server.h"
+
+static GMainLoop *mainloop;
+
+static const struct ofono_sms_driver *smsdriver;
 
 struct rilmodem_sms_data {
 	GRil *ril;
@@ -66,84 +71,6 @@ struct sms_data {
 	const struct ofono_phone_number ph;
 	gint mr;
 };
-
-static GMainLoop *mainloop;
-
-static const struct ofono_sms_driver *smsdriver;
-
-/* Declarations && Re-implementations of core functions. */
-void ril_sms_exit(void);
-void ril_sms_init(void);
-
-struct ofono_sms {
-	void *driver_data;
-	const struct sms_data *sd;
-};
-
-struct ofono_sms *ofono_sms_create(struct ofono_modem *modem,
-					unsigned int vendor,
-					const char *driver,
-					void *data)
-{
-	struct rilmodem_sms_data *rsd = data;
-	struct ofono_sms *sms = g_new0(struct ofono_sms, 1);
-	int retval;
-
-	retval = smsdriver->probe(sms, OFONO_RIL_VENDOR_AOSP, rsd->ril);
-	g_assert(retval == 0);
-
-	return sms;
-}
-
-int ofono_sms_driver_register(const struct ofono_sms_driver *d)
-{
-	if (smsdriver == NULL)
-		smsdriver = d;
-
-	return 0;
-}
-
-void ofono_sms_set_data(struct ofono_sms *sms, void *data)
-{
-	sms->driver_data = data;
-}
-
-void *ofono_sms_get_data(struct ofono_sms *sms)
-{
-	return sms->driver_data;
-}
-
-void ofono_sms_register(struct ofono_sms *sms)
-{
-}
-
-void ofono_sms_driver_unregister(const struct ofono_sms_driver *d)
-{
-}
-
-void ofono_sms_deliver_notify(struct ofono_sms *sms, const unsigned char *pdu,
-							int len, int tpdu_len)
-{
-	g_assert(sms->sd->pdu_len == len);
-	g_assert(sms->sd->tpdu_len == tpdu_len);
-	g_assert(!memcmp(pdu, sms->sd->pdu, len));
-
-	g_main_loop_quit(mainloop);
-}
-
-void ofono_sms_status_notify(struct ofono_sms *sms, const unsigned char *pdu,
-							int len, int tpdu_len)
-{
-	ofono_sms_deliver_notify(sms, pdu, len, tpdu_len);
-}
-
-/*
- * As all our architectures are little-endian except for
- * PowerPC, and the Binder wire-format differs slightly
- * depending on endian-ness, the following guards against test
- * failures when run on PowerPC.
- */
-#if BYTE_ORDER == LITTLE_ENDIAN
 
 static void sca_query_callback(const struct ofono_error *error,
 					const struct ofono_phone_number *ph,
@@ -311,10 +238,10 @@ static const struct sms_data testdata_sca_query_invalid_3 = {
  * {number="+34607003110"}
  */
 static const guchar req_set_smsc_address_parcel_1[] = {
-	+0x00, 0x00, 0x00, 0x2C, 0x65, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	+0x0e, 0x00, 0x00, 0x00, 0x22, 0x00, 0x2b, 0x00, 0x33, 0x00, 0x34, 0x00,
-	+0x36, 0x00, 0x30, 0x00, 0x37, 0x00, 0x30, 0x00, 0x30, 0x00, 0x33, 0x00,
-	+0x31, 0x00, 0x31, 0x00, 0x30, 0x00, 0x22, 0x00, 0x00, 0x00, 0x00, 0x00
+	0x00, 0x00, 0x00, 0x2c, 0x65, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x0e, 0x00, 0x00, 0x00, 0x22, 0x00, 0x2b, 0x00, 0x33, 0x00, 0x34, 0x00,
+	0x36, 0x00, 0x30, 0x00, 0x37, 0x00, 0x30, 0x00, 0x30, 0x00, 0x33, 0x00,
+	0x31, 0x00, 0x31, 0x00, 0x30, 0x00, 0x22, 0x00, 0x00, 0x00, 0x00, 0x00
 };
 
 static const struct sms_data testdata_sca_set_valid_1 = {
@@ -488,6 +415,72 @@ static const struct sms_data testdata_new_sms_valid_2 = {
 	.tpdu_len = 28,
 };
 
+/* Declarations && Re-implementations of core functions. */
+void ril_sms_exit(void);
+void ril_sms_init(void);
+
+struct ofono_sms {
+	void *driver_data;
+	const struct sms_data *sd;
+};
+
+struct ofono_sms *ofono_sms_create(struct ofono_modem *modem,
+					unsigned int vendor,
+					const char *driver,
+					void *data)
+{
+	struct rilmodem_sms_data *rsd = data;
+	struct ofono_sms *sms = g_new0(struct ofono_sms, 1);
+	int retval;
+
+	retval = smsdriver->probe(sms, OFONO_RIL_VENDOR_AOSP, rsd->ril);
+	g_assert(retval == 0);
+
+	return sms;
+}
+
+int ofono_sms_driver_register(const struct ofono_sms_driver *d)
+{
+	if (smsdriver == NULL)
+		smsdriver = d;
+
+	return 0;
+}
+
+void ofono_sms_set_data(struct ofono_sms *sms, void *data)
+{
+	sms->driver_data = data;
+}
+
+void *ofono_sms_get_data(struct ofono_sms *sms)
+{
+	return sms->driver_data;
+}
+
+void ofono_sms_register(struct ofono_sms *sms)
+{
+}
+
+void ofono_sms_driver_unregister(const struct ofono_sms_driver *d)
+{
+}
+
+void ofono_sms_deliver_notify(struct ofono_sms *sms, const unsigned char *pdu,
+							int len, int tpdu_len)
+{
+	g_assert(sms->sd->pdu_len == len);
+	g_assert(sms->sd->tpdu_len == tpdu_len);
+	g_assert(!memcmp(pdu, sms->sd->pdu, len));
+
+	g_main_loop_quit(mainloop);
+}
+
+void ofono_sms_status_notify(struct ofono_sms *sms, const unsigned char *pdu,
+							int len, int tpdu_len)
+{
+	ofono_sms_deliver_notify(sms, pdu, len, tpdu_len);
+}
+
 static void server_connect_cb(gpointer data)
 {
 	struct rilmodem_sms_data *rsd = data;
@@ -505,6 +498,8 @@ static void server_connect_cb(gpointer data)
 	else
 		g_assert(sd->start_func(rsd) == FALSE);
 }
+
+#if BYTE_ORDER == LITTLE_ENDIAN
 
 /*
  * This unit test:
@@ -529,8 +524,7 @@ static void test_sms_func(gconstpointer data)
 	rsd->serverd = rilmodem_test_server_create(&server_connect_cb,
 								&sd->rtd, rsd);
 
-	rsd->ril = g_ril_new(rilmodem_test_get_socket_name(rsd->serverd),
-							OFONO_RIL_VENDOR_AOSP);
+	rsd->ril = g_ril_new(RIL_SERVER_SOCK_PATH, OFONO_RIL_VENDOR_AOSP);
 	g_assert(rsd->ril != NULL);
 
 	mainloop = g_main_loop_new(NULL, FALSE);

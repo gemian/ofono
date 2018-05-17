@@ -2146,7 +2146,7 @@ unsigned char *sms_decode_datagram(GSList *sms_list, long *out_len)
 
 	for (l = sms_list; l; l = l->next) {
 		guint8 taken = 0;
-		guint8 udl = 0;
+		guint8 udl;
 		const guint8 *ud;
 		struct sms_udh_iter iter;
 
@@ -2177,7 +2177,7 @@ unsigned char *sms_decode_datagram(GSList *sms_list, long *out_len)
 	len = 0;
 	for (l = sms_list; l; l = l->next) {
 		guint8 taken = 0;
-		guint8 udl = 0;
+		guint8 udl;
 		const guint8 *ud;
 		struct sms_udh_iter iter;
 
@@ -2214,25 +2214,28 @@ static inline int sms_text_capacity_gsm(int max, int offset)
 char *sms_decode_text(GSList *sms_list)
 {
 	GSList *l;
-	GString *str = NULL;
-	GByteArray *utf16 = NULL;
+	GString *str;
 	const struct sms *sms;
 	int guess_size = g_slist_length(sms_list);
-	char *text = NULL;
+	char *utf8;
+	GByteArray *utf16 = 0;
 
 	if (guess_size == 1)
 		guess_size = 160;
 	else
 		guess_size = (guess_size - 1) * 160;
 
+	str = g_string_sized_new(guess_size);
+
 	for (l = sms_list; l; l = l->next) {
 		guint8 taken = 0;
-		guint8 dcs = 0;
-		guint8 udl = 0;
+		guint8 dcs;
+		guint8 udl;
 		enum sms_charset charset;
 		int udl_in_bytes;
 		const guint8 *ud;
 		struct sms_udh_iter iter;
+		char *converted;
 
 		sms = l->data;
 
@@ -2259,7 +2262,6 @@ char *sms_decode_text(GSList *sms_list)
 			guint8 locking_shift = 0;
 			guint8 single_shift = 0;
 			int max_chars = sms_text_capacity_gsm(udl, taken);
-			char *converted;
 
 			if (unpack_7bit_own_buf(ud + taken,
 						udl_in_bytes - taken,
@@ -2289,38 +2291,52 @@ char *sms_decode_text(GSList *sms_list)
 								locking_shift,
 								single_shift);
 			if (converted) {
-				if (str == NULL)
-					str = g_string_sized_new(guess_size);
-
 				g_string_append(str, converted);
 				g_free(converted);
 			}
 		} else {
+			const guint8 *from = ud + taken;
 			/*
 			 * According to the spec: A UCS2 character shall not be
 			 * split in the middle; if the length of the User Data
 			 * Header is odd, the maximum length of the whole TP-UD
 			 * field is 139 octets
 			 */
-			gssize num_octects = (udl_in_bytes - taken) & ~1u;
+			gssize num_ucs2_chars = (udl_in_bytes - taken) >> 1;
+			num_ucs2_chars = num_ucs2_chars << 1;
 
-			if (utf16 == NULL)
-				utf16 = g_byte_array_sized_new(guess_size);
+			/*
+			 * In theory SMS supports encoding using UCS2 which
+			 * is 16-bit, however in the real world messages
+			 * are encoded in UTF-16 which can be 4 bytes and
+			 * a multiple fragment message can split a 4-byte
+			 * character in the middle. So accumulate the
+			 * entire message before converting to UTF-8.
+			 */
+			if (!utf16)
+				utf16 = g_byte_array_new();
 
-			g_byte_array_append(utf16, ud + taken, num_octects);
+			g_byte_array_append(utf16, from, num_ucs2_chars);
 		}
+
 	}
 
-	if (str != NULL) {
-		text = g_string_free(str, FALSE);
-	} else if (utf16 != NULL) {
-		text = g_convert((gchar *) utf16->data, utf16->len,
-					"UTF-8//TRANSLIT", "UTF-16BE",
-					NULL, NULL, NULL);
+	if (utf16) {
+		char *converted = g_convert_with_fallback((const gchar *)
+						utf16->data, utf16->len,
+						"UTF-8//TRANSLIT", "UTF-16BE",
+						NULL, NULL, NULL, NULL);
+		if (converted) {
+			g_string_append(str, converted);
+			g_free(converted);
+		}
+
 		g_byte_array_free(utf16, TRUE);
 	}
 
-	return text;
+	utf8 = g_string_free(str, FALSE);
+
+	return utf8;
 }
 
 static int sms_serialize(unsigned char *buf, const struct sms *sms)
@@ -2548,8 +2564,7 @@ void sms_assembly_free(struct sms_assembly *assembly)
 	for (l = assembly->assembly_list; l; l = l->next) {
 		struct sms_assembly_node *node = l->data;
 
-		g_slist_foreach(node->fragment_list, (GFunc) g_free, 0);
-		g_slist_free(node->fragment_list);
+		g_slist_free_full(node->fragment_list, g_free);
 		g_free(node);
 	}
 
@@ -2699,8 +2714,7 @@ void sms_assembly_expire(struct sms_assembly *assembly, time_t before)
 
 		sms_assembly_backup_free(assembly, node);
 
-		g_slist_foreach(node->fragment_list, (GFunc) g_free, 0);
-		g_slist_free(node->fragment_list);
+		g_slist_free_full(node->fragment_list, g_free);
 		g_free(node);
 
 		if (prev)
@@ -3015,7 +3029,7 @@ gboolean status_report_assembly_report(struct status_report_assembly *assembly,
 	struct id_table_node *node;
 	gboolean delivered;
 	gboolean pending;
-	unsigned char *msgid = 0;
+	unsigned char *msgid;
 	int i;
 
 	/* We ignore temporary or tempfinal status reports */
@@ -3513,8 +3527,7 @@ GSList *sms_datagram_prepare(const char *to,
 	}
 
 	if (left > 0) {
-		g_slist_foreach(r, (GFunc) g_free, NULL);
-		g_slist_free(r);
+		g_slist_free_full(r, g_free);
 
 		return NULL;
 	} else {
@@ -3705,8 +3718,7 @@ GSList *sms_text_prepare_with_alphabet(const char *to, const char *utf8,
 		g_free(ucs2_encoded);
 
 	if (left > 0) {
-		g_slist_foreach(r, (GFunc) g_free, NULL);
-		g_slist_free(r);
+		g_slist_free_full(r, g_free);
 
 		return NULL;
 	} else {
@@ -4123,12 +4135,13 @@ char *cbs_decode_text(GSList *cbs_list, char *iso639_lang)
 			 */
 			for (; i < written; i++, bufsize++) {
 				if (unpacked[i] == '\r') {
-					int t;
+					int j;
 
-					t = strspn((const char *) unpacked + i,
-							"\r");
+					for (j = i + 1; j < written; j++)
+						if (unpacked[j] != '\r')
+							break;
 
-					if (t + i == written)
+					if (j == written)
 						break;
 				}
 
@@ -4221,8 +4234,7 @@ void cbs_assembly_free(struct cbs_assembly *assembly)
 	for (l = assembly->assembly_list; l; l = l->next) {
 		struct cbs_assembly_node *node = l->data;
 
-		g_slist_foreach(node->pages, (GFunc) g_free, 0);
-		g_slist_free(node->pages);
+		g_slist_free_full(node->pages, g_free);
 		g_free(node);
 	}
 
@@ -4301,8 +4313,7 @@ static void cbs_assembly_expire(struct cbs_assembly *assembly,
 		else
 			assembly->assembly_list = l->next;
 
-		g_slist_foreach(node->pages, (GFunc) g_free, NULL);
-		g_slist_free(node->pages);
+		g_slist_free_full(node->pages, g_free);
 		g_free(node->pages);
 		tmp = l;
 		l = l->next;
@@ -4611,8 +4622,7 @@ GSList *cbs_extract_topic_ranges(const char *ranges)
 	}
 
 	tmp = cbs_optimize_ranges(ret);
-	g_slist_foreach(ret, (GFunc) g_free, NULL);
-	g_slist_free(ret);
+	g_slist_free_full(ret, g_free);
 
 	return tmp;
 }
@@ -4768,41 +4778,6 @@ gboolean ussd_encode(const char *str, long *items_written, unsigned char *pdu)
 
 	if (items_written)
 		*items_written = num_packed;
-
-	return TRUE;
-}
-
-gboolean ussd_dcs_encode(const char *str, int *dcs,
-				long *items_written, unsigned char *pdu)
-{
-	gsize written;
-	char *ucs2;
-
-	/* For the DCS coding of USSD strings, see 3gpp 23.038, sect. 5 */
-
-	if (ussd_encode(str, items_written, pdu)) {
-		/* DCS 0x0F: GSM 7 bits, language unspecified */
-		*dcs = 0x0F;
-		return TRUE;
-	}
-
-	/* Trying with UCS-2 */
-	ucs2 = g_convert(str, -1, "UCS-2BE//TRANSLIT", "UTF-8",
-				NULL, &written, NULL);
-	if (ucs2 == NULL || written > 160) {
-		g_free(ucs2);
-		return FALSE;
-	}
-
-	memcpy(pdu, ucs2, written);
-
-	g_free(ucs2);
-
-	if (items_written)
-		*items_written = written;
-
-	/* DCS 0x48: UCS-2 string, uncompressed, unspecified message class */
-	*dcs = 0x48;
 
 	return TRUE;
 }

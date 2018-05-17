@@ -32,6 +32,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
+#include <string.h>
 
 #include <ofono/modem.h>
 #include <ofono/types.h>
@@ -41,6 +42,10 @@
 #include "common.h"
 #include "ril_constants.h"
 #include "rilmodem-test-server.h"
+
+static GMainLoop *mainloop;
+
+static const struct ofono_call_settings_driver *csdriver;
 
 struct rilmodem_cs_data {
 	GRil *ril;
@@ -62,67 +67,6 @@ struct cs_data {
 	gint cb_int1;
 	gint cb_int2;
 };
-
-static const struct ofono_call_settings_driver *csdriver;
-
-/* Declarations && Re-implementations of core functions. */
-void ril_call_settings_exit(void);
-void ril_call_settings_init(void);
-
-struct ofono_call_settings {
-	void *driver_data;
-};
-
-struct ofono_call_settings *ofono_call_settings_create(struct ofono_modem *modem,
-							unsigned int vendor,
-							const char *driver,
-							void *data)
-{
-	struct rilmodem_cs_data *rcd = data;
-	struct ofono_call_settings *cs = g_new0(struct ofono_call_settings, 1);
-	int retval;
-
-	retval = csdriver->probe(cs, OFONO_RIL_VENDOR_AOSP, rcd->ril);
-	g_assert(retval == 0);
-
-	return cs;
-}
-
-int ofono_call_settings_driver_register(const struct ofono_call_settings_driver *d)
-{
-	if (csdriver == NULL)
-		csdriver = d;
-
-	return 0;
-}
-
-void ofono_call_settings_set_data(struct ofono_call_settings *cs, void *data)
-{
-	cs->driver_data = data;
-}
-
-void *ofono_call_settings_get_data(struct ofono_call_settings *cs)
-{
-	return cs->driver_data;
-}
-
-void ofono_call_settings_register(struct ofono_call_settings *cs)
-{
-}
-
-void ofono_call_settings_driver_unregister(const struct ofono_call_settings_driver *d)
-{
-}
-
-/*
- * As all our architectures are little-endian except for
- * PowerPC, and the Binder wire-format differs slightly
- * depending on endian-ness, the following guards against test
- * failures when run on PowerPC.
- */
-#if BYTE_ORDER == LITTLE_ENDIAN
-
-static GMainLoop *mainloop;
 
 static void status_query_callback(const struct ofono_error *error, int status,
 								 gpointer data)
@@ -259,7 +203,7 @@ static const struct cs_data testdata_clip_query_invalid_1 = {
 		.rsp_error = RIL_E_SUCCESS,
 	},
 	.cb_int1 = -1,
-	.error_type = OFONO_ERROR_TYPE_NO_ERROR,
+	.error_type = OFONO_ERROR_TYPE_FAILURE,
 };
 
 /* error triggered by RIL reply error */
@@ -281,7 +225,7 @@ static const guchar req_cw_query_parcel_1[] = {
 
 /* reply data for QUErY_CALL_WAITING: 1='enabled' 3='data|voice' */
 static const guchar rsp_cw_query_data_1[] = {
-	0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x3, 0x00, 0x00, 0x00
+	0x02, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x3, 0x00, 0x00, 0x00
 };
 
 static const struct cs_data testdata_cw_query_valid_1 = {
@@ -313,7 +257,7 @@ static const struct cs_data testdata_cw_query_invalid_1 = {
 		.rsp_error = RIL_E_SUCCESS,
 	},
 	.cb_int1 = -1,
-	.error_type = OFONO_ERROR_TYPE_NO_ERROR,
+	.error_type = OFONO_ERROR_TYPE_FAILURE,
 };
 
 /* GENERIC_FAILURE returned in RIL reply */
@@ -444,6 +388,55 @@ static const struct cs_data testdata_clir_set_invalid_1 = {
 	.error_type = OFONO_ERROR_TYPE_FAILURE,
 };
 
+/* Declarations && Re-implementations of core functions. */
+void ril_call_settings_exit(void);
+void ril_call_settings_init(void);
+
+struct ofono_call_settings {
+	void *driver_data;
+};
+
+struct ofono_call_settings *ofono_call_settings_create(struct ofono_modem *modem,
+							unsigned int vendor,
+							const char *driver,
+							void *data)
+{
+	struct rilmodem_cs_data *rcd = data;
+	struct ofono_call_settings *cs = g_new0(struct ofono_call_settings, 1);
+	int retval;
+
+	retval = csdriver->probe(cs, OFONO_RIL_VENDOR_AOSP, rcd->ril);
+	g_assert(retval == 0);
+
+	return cs;
+}
+
+int ofono_call_settings_driver_register(const struct ofono_call_settings_driver *d)
+{
+	if (csdriver == NULL)
+		csdriver = d;
+
+	return 0;
+}
+
+void ofono_call_settings_set_data(struct ofono_call_settings *cs, void *data)
+{
+	cs->driver_data = data;
+}
+
+void *ofono_call_settings_get_data(struct ofono_call_settings *cs)
+{
+	return cs->driver_data;
+}
+
+void ofono_call_settings_register(struct ofono_call_settings *cs)
+{
+}
+
+void ofono_call_settings_driver_unregister(const struct ofono_call_settings_driver *d)
+{
+}
+
 static void server_connect_cb(gpointer data)
 {
 	struct rilmodem_cs_data *rcd = data;
@@ -456,6 +449,14 @@ static void server_connect_cb(gpointer data)
 	/* add_idle doesn't work, read blocks main loop!!! */
 	g_assert(csd->start_func(rcd) == FALSE);
 }
+
+/*
+ * As all our architectures are little-endian except for
+ * PowerPC, and the Binder wire-format differs slightly
+ * depending on endian-ness, the following guards against test
+ * failures when run on PowerPC.
+ */
+#if BYTE_ORDER == LITTLE_ENDIAN
 
 /*
  * This unit test:
@@ -478,10 +479,9 @@ static void test_cs_func(gconstpointer data)
 	rcd->test_data = csd;
 
 	rcd->serverd = rilmodem_test_server_create(&server_connect_cb,
-								&csd->rtd, rcd);
+							&csd->rtd, rcd);
 
-	rcd->ril = g_ril_new(rilmodem_test_get_socket_name(rcd->serverd),
-							OFONO_RIL_VENDOR_AOSP);
+	rcd->ril = g_ril_new("/tmp/unittestril", OFONO_RIL_VENDOR_AOSP);
 	g_assert(rcd->ril != NULL);
 
 	mainloop = g_main_loop_new(NULL, FALSE);

@@ -51,6 +51,7 @@ struct sim_data {
 	GAtChat *chat;
 	unsigned int vendor;
 	guint ready_id;
+	guint passwd_type_mask;
 	struct at_util_sim_state_query *sim_state_query;
 };
 
@@ -1120,6 +1121,7 @@ static void at_pin_retries_query(struct ofono_sim *sim,
 			return;
 		break;
 	case OFONO_VENDOR_UBLOX:
+	case OFONO_VENDOR_UBLOX_TOBY_L2:
 		if (g_at_chat_send(sd->chat, "AT+UPINCNT", upincnt_prefix,
 					upincnt_cb, cbd, g_free) > 0)
 			return;
@@ -1292,14 +1294,15 @@ static void sim_state_cb(gboolean present, gpointer user_data)
 	struct cb_data *cbd = user_data;
 	struct sim_data *sd = cbd->user;
 	ofono_sim_lock_unlock_cb_t cb = cbd->cb;
+	void *data = cbd->data;
 
 	at_util_sim_state_query_free(sd->sim_state_query);
 	sd->sim_state_query = NULL;
 
 	if (present == 1)
-		CALLBACK_WITH_SUCCESS(cb, cbd->data);
+		CALLBACK_WITH_SUCCESS(cb, data);
 	else
-		CALLBACK_WITH_FAILURE(cb, cbd->data);
+		CALLBACK_WITH_FAILURE(cb, data);
 }
 
 static void at_pin_send_cb(gboolean ok, GAtResult *result,
@@ -1457,9 +1460,8 @@ static void at_pin_enable(struct ofono_sim *sim,
 	struct cb_data *cbd = cb_data_new(cb, data);
 	char buf[64];
 	int ret;
-	unsigned int len = sizeof(at_clck_cpwd_fac) / sizeof(*at_clck_cpwd_fac);
 
-	if (passwd_type >= len || at_clck_cpwd_fac[passwd_type] == NULL)
+	if (!(sd->passwd_type_mask & (1 << passwd_type)))
 		goto error;
 
 	snprintf(buf, sizeof(buf), "AT+CLCK=\"%s\",%i,\"%s\"",
@@ -1488,10 +1490,8 @@ static void at_change_passwd(struct ofono_sim *sim,
 	struct cb_data *cbd = cb_data_new(cb, data);
 	char buf[64];
 	int ret;
-	unsigned int len = sizeof(at_clck_cpwd_fac) / sizeof(*at_clck_cpwd_fac);
 
-	if (passwd_type >= len ||
-			at_clck_cpwd_fac[passwd_type] == NULL)
+	if (!(sd->passwd_type_mask & (1 << passwd_type)))
 		goto error;
 
 	snprintf(buf, sizeof(buf), "AT+CPWD=\"%s\",\"%s\",\"%s\"",
@@ -1516,7 +1516,7 @@ static void at_lock_status_cb(gboolean ok, GAtResult *result,
 {
 	struct cb_data *cbd = user_data;
 	GAtResultIter iter;
-	ofono_sim_locked_cb_t cb = cbd->cb;
+	ofono_query_facility_lock_cb_t cb = cbd->cb;
 	struct ofono_error error;
 	int locked;
 
@@ -1541,16 +1541,15 @@ static void at_lock_status_cb(gboolean ok, GAtResult *result,
 	cb(&error, locked, cbd->data);
 }
 
-static void at_pin_query_enabled(struct ofono_sim *sim,
+static void at_query_clck(struct ofono_sim *sim,
 				enum ofono_sim_password_type passwd_type,
-				ofono_sim_locked_cb_t cb, void *data)
+				ofono_query_facility_lock_cb_t cb, void *data)
 {
 	struct sim_data *sd = ofono_sim_get_data(sim);
 	struct cb_data *cbd = cb_data_new(cb, data);
 	char buf[64];
-	unsigned int len = sizeof(at_clck_cpwd_fac) / sizeof(*at_clck_cpwd_fac);
 
-	if (passwd_type >= len || at_clck_cpwd_fac[passwd_type] == NULL)
+	if (!(sd->passwd_type_mask & (1 << passwd_type)))
 		goto error;
 
 	snprintf(buf, sizeof(buf), "AT+CLCK=\"%s\",2",
@@ -1566,13 +1565,42 @@ error:
 	CALLBACK_WITH_FAILURE(cb, -1, data);
 }
 
-static gboolean at_sim_register(gpointer user)
+static void at_clck_query_cb(gboolean ok, GAtResult *result, gpointer user)
 {
 	struct ofono_sim *sim = user;
+	struct sim_data *sd = ofono_sim_get_data(sim);
+	GAtResultIter iter;
+	const char *fac;
 
+	if (!ok)
+		goto done;
+
+	g_at_result_iter_init(&iter, result);
+
+	/* e.g. +CLCK: ("SC","FD","PN","PU","PP","PC","PF") */
+	if (!g_at_result_iter_next(&iter, "+CLCK:") ||
+				!g_at_result_iter_open_list(&iter))
+		goto done;
+
+	/* Clear the default mask */
+	sd->passwd_type_mask = 0;
+
+	/* Set the bits for <fac>s that are actually supported */
+	while (g_at_result_iter_next_string(&iter, &fac)) {
+		unsigned int i;
+
+		/* Find it in the list of known <fac>s */
+		for (i = 0; i < ARRAY_SIZE(at_clck_cpwd_fac); i++) {
+			if (!g_strcmp0(at_clck_cpwd_fac[i], fac)) {
+				sd->passwd_type_mask |= (1 << i);
+				DBG("found %s", fac);
+				break;
+			}
+		}
+	}
+
+done:
 	ofono_sim_register(sim);
-
-	return FALSE;
 }
 
 static int at_sim_probe(struct ofono_sim *sim, unsigned int vendor,
@@ -1580,6 +1608,7 @@ static int at_sim_probe(struct ofono_sim *sim, unsigned int vendor,
 {
 	GAtChat *chat = data;
 	struct sim_data *sd;
+	unsigned int i;
 
 	sd = g_new0(struct sim_data, 1);
 	sd->chat = g_at_chat_clone(chat);
@@ -1589,9 +1618,15 @@ static int at_sim_probe(struct ofono_sim *sim, unsigned int vendor,
 		g_at_chat_send(sd->chat, "AT*EPEE=1", NULL, NULL, NULL, NULL);
 
 	ofono_sim_set_data(sim, sd);
-	g_idle_add(at_sim_register, sim);
 
-	return 0;
+	/* <fac>s supported by default */
+	for (i = 0; i < ARRAY_SIZE(at_clck_cpwd_fac); i++)
+		if (at_clck_cpwd_fac[i])
+			sd->passwd_type_mask |= (1 << i);
+
+	/* Query supported <fac>s */
+	return g_at_chat_send(sd->chat, "AT+CLCK=?", clck_prefix,
+				at_clck_query_cb, sim, NULL) ? 0 : -1;
 }
 
 static void at_sim_remove(struct ofono_sim *sim)
@@ -1626,7 +1661,7 @@ static struct ofono_sim_driver driver = {
 	.reset_passwd		= at_pin_send_puk,
 	.lock			= at_pin_enable,
 	.change_passwd		= at_change_passwd,
-	.query_locked		= at_pin_query_enabled,
+	.query_facility_lock	= at_query_clck,
 };
 
 static struct ofono_sim_driver driver_noef = {
@@ -1640,7 +1675,7 @@ static struct ofono_sim_driver driver_noef = {
 	.reset_passwd		= at_pin_send_puk,
 	.lock			= at_pin_enable,
 	.change_passwd		= at_change_passwd,
-	.query_locked		= at_pin_query_enabled,
+	.query_facility_lock	= at_query_clck,
 };
 
 void at_sim_init(void)

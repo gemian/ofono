@@ -24,6 +24,7 @@
 #endif
 
 #include <dlfcn.h>
+#include <string.h>
 
 #include <glib.h>
 
@@ -52,7 +53,8 @@ static gboolean add_plugin(void *handle, struct ofono_plugin_desc *desc)
 	if (desc->init == NULL)
 		return FALSE;
 
-	if (g_str_equal(desc->version, OFONO_VERSION) == FALSE) {
+	/* Allow older versions (assuming that API is backward compatible) */
+	if (!desc->version || strcmp(desc->version, OFONO_VERSION) > 0) {
 		ofono_error("Invalid version %s for %s", desc->version,
 							desc->description);
 		return FALSE;
@@ -97,6 +99,25 @@ static gboolean check_plugin(struct ofono_plugin_desc *desc,
 	}
 
 	return TRUE;
+}
+
+void __ofono_plugin_foreach(void (*fn) (struct ofono_plugin_desc *desc,
+				int flags, void *user_data), void *user_data)
+{
+	GSList *list;
+
+	for (list = plugins; list; list = list->next) {
+		struct ofono_plugin *plugin = list->data;
+		int flags = 0;
+
+		if (!plugin->handle)
+			flags |= OFONO_PLUGIN_FLAG_BUILTIN;
+
+		if (plugin->active)
+			flags |= OFONO_PLUGIN_FLAG_ACTIVE;
+
+		fn(plugin->desc, flags, user_data);
+	}
 }
 
 #include "builtin.h"

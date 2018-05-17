@@ -38,7 +38,7 @@
 
 #include <glib.h>
 
-#include "log.h"
+#include <ofono/log.h>
 #include "ringbuffer.h"
 #include "gril.h"
 #include "grilutil.h"
@@ -47,12 +47,6 @@
 	if (ril->trace == TRUE)			\
 		ofono_debug(fmt, ## arg);	\
 } while (0)
-
-#define COMMAND_FLAG_EXPECT_PDU			0x1
-#define COMMAND_FLAG_EXPECT_SHORT_PROMPT	0x2
-
-#define	RADIO_GID 1001
-#define	RADIO_UID 1001
 
 struct ril_request {
 	gchar *data;
@@ -104,7 +98,6 @@ struct ril_s {
 	int slot;
 	GRilMsgIdToStrFunc req_to_string;
 	GRilMsgIdToStrFunc unsol_to_string;
-	int version;
 };
 
 struct _GRil {
@@ -381,6 +374,12 @@ static void handle_response(struct ril_s *p, struct ril_msg *message)
 			if (req->callback)
 				req->callback(message, req->user_data);
 
+			/* gril may have been destroyed in the request callback */
+			if (p->destroyed) {
+				ril_request_destroy(req);
+				return;
+			}
+
 			len = g_queue_get_length(p->out_queue);
 
 			for (i = 0; i < len; i++) {
@@ -461,11 +460,6 @@ static void dispatch(struct ril_s *p, struct ril_msg *message)
 	gchar *bufp = message->buf;
 	gchar *datap;
 	gsize data_len;
-
-	if (message->buf_len == 0) {
-		ofono_error("RIL error: incoming message with size 0");
-		goto error;
-	}
 
 	/* This could be done with a struct/union... */
 	unsolicited_field = (int32_t *) (void *) bufp;
@@ -800,23 +794,14 @@ static gboolean node_compare_by_group(struct ril_notify_node *node,
 	return FALSE;
 }
 
-static void set_process_id(gid_t gid, uid_t uid)
-{
-	if (setegid(gid) < 0)
-		ofono_error("%s: setegid(%d) failed: %s (%d)",
-				__func__, gid, strerror(errno), errno);
-
-	if (seteuid(uid) < 0)
-		ofono_error("%s: seteuid(%d) failed: %s (%d)",
-				__func__, uid, strerror(errno), errno);
-}
-
-static struct ril_s *create_ril(const char *sock_path)
+static struct ril_s *create_ril(const char *sock_path, unsigned int uid,
+					unsigned int gid)
 
 {
 	struct ril_s *ril;
 	struct sockaddr_un addr;
 	int sk;
+	int r;
 	GIOChannel *io;
 
 	ril = g_try_new0(struct ril_s, 1);
@@ -845,19 +830,31 @@ static struct ril_s *create_ril(const char *sock_path)
 	addr.sun_family = AF_UNIX;
 	strncpy(addr.sun_path, sock_path, sizeof(addr.sun_path) - 1);
 
-	/* RIL expects user radio to connect to the socket */
-	set_process_id(RADIO_GID, RADIO_UID);
+	/* Drop root user last, otherwise we won't be able to change egid */
+	if (gid != 0 && setegid(gid) < 0)
+		ofono_error("%s: setegid(%d) failed: %s (%d)",
+				__func__, gid, strerror(errno), errno);
 
-	if (connect(sk, (struct sockaddr *) &addr, sizeof(addr)) < 0) {
+	if (uid != 0 && seteuid(uid) < 0)
+		ofono_error("%s: seteuid(%d) failed: %s (%d)",
+				__func__, uid, strerror(errno), errno);
+
+	r = connect(sk, (struct sockaddr *) &addr, sizeof(addr));
+
+	/* Switch back to root as needed */
+	if (uid && seteuid(0) < 0)
+		ofono_error("%s: seteuid(0) failed: %s (%d)",
+				__func__, strerror(errno), errno);
+
+	if (gid && setegid(0) < 0)
+		ofono_error("%s: setegid(0) failed: %s (%d)",
+				__func__, strerror(errno), errno);
+
+	if (r < 0) {
 		ofono_error("create_ril: can't connect to RILD: %s (%d)\n",
 				strerror(errno), errno);
-		/* Switch back to root */
-		set_process_id(0, 0);
 		goto error;
 	}
-
-	/* Switch back to root */
-	set_process_id(0, 0);
 
 	io = g_io_channel_unix_new(sk);
 	if (io == NULL) {
@@ -1054,7 +1051,8 @@ void g_ril_init_parcel(const struct ril_msg *message, struct parcel *rilp)
 	rilp->malformed = 0;
 }
 
-GRil *g_ril_new(const char *sock_path, enum ofono_ril_vendor vendor)
+GRil *g_ril_new_with_ucred(const char *sock_path, enum ofono_ril_vendor vendor,
+				unsigned int uid, unsigned int gid)
 {
 	GRil *ril;
 
@@ -1062,7 +1060,7 @@ GRil *g_ril_new(const char *sock_path, enum ofono_ril_vendor vendor)
 	if (ril == NULL)
 		return NULL;
 
-	ril->parent = create_ril(sock_path);
+	ril->parent = create_ril(sock_path, uid, gid);
 	if (ril->parent == NULL) {
 		g_free(ril);
 		return NULL;
@@ -1072,9 +1070,13 @@ GRil *g_ril_new(const char *sock_path, enum ofono_ril_vendor vendor)
 	ril->ref_count = 1;
 
 	ril->parent->vendor = vendor;
-	ril->parent->version = RIL_VERSION_UNSPECIFIED;
 
 	return ril;
+}
+
+GRil *g_ril_new(const char *sock_path, enum ofono_ril_vendor vendor)
+{
+	return g_ril_new_with_ucred(sock_path, vendor, 0, 0);
 }
 
 GRil *g_ril_clone(GRil *clone)
@@ -1212,24 +1214,6 @@ int g_ril_get_slot(GRil *ril)
 		return 0;
 
 	return ril->parent->slot;
-}
-
-gboolean g_ril_set_version(GRil *ril, int version)
-{
-	if (ril == NULL || ril->parent == NULL ||
-			ril->parent->version != RIL_VERSION_UNSPECIFIED)
-		return FALSE;
-
-	ril->parent->version = version;
-	return TRUE;
-}
-
-int g_ril_get_version(GRil *ril)
-{
-	if (ril == NULL)
-		return RIL_VERSION_UNSPECIFIED;
-
-	return ril->parent->version;
 }
 
 gboolean g_ril_set_debugf(GRil *ril,

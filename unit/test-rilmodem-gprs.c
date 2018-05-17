@@ -49,10 +49,17 @@ static const struct ofono_gprs_driver *gprs_drv;
 void ril_gprs_exit(void);
 void ril_gprs_init(void);
 
+struct ofono_modem;
+
 struct ofono_gprs {
 	void *driver_data;
 	GRil *ril;
+	struct ofono_modem *modem;
 	struct engine_data *engined;
+};
+
+struct ofono_modem {
+	struct ofono_gprs *gprs;
 };
 
 int ofono_gprs_driver_register(const struct ofono_gprs_driver *d)
@@ -68,6 +75,18 @@ void ofono_gprs_driver_unregister(const struct ofono_gprs_driver *d)
 	gprs_drv = NULL;
 }
 
+void ofono_gprs_register(struct ofono_gprs *gprs)
+{
+	const struct rilmodem_test_step *step;
+
+	step = rilmodem_test_engine_get_current_step(gprs->engined);
+
+	g_assert(step->type == TST_EVENT_CALL);
+	g_assert(step->call_func == (void (*)(void)) ofono_gprs_register);
+
+	rilmodem_test_engine_next_step(gprs->engined);
+}
+
 void ofono_gprs_set_data(struct ofono_gprs *gprs, void *data)
 {
 	gprs->driver_data = data;
@@ -78,22 +97,103 @@ void *ofono_gprs_get_data(struct ofono_gprs *gprs)
 	return gprs->driver_data;
 }
 
-GRil *ril_get_gril_complement(struct ofono_modem *modem);
-GRil *ril_get_gril_complement(struct ofono_modem *modem)
+void ofono_gprs_status_notify(struct ofono_gprs *gprs, int status)
 {
-	return NULL;
+	const struct rilmodem_test_step *step;
+
+	step = rilmodem_test_engine_get_current_step(gprs->engined);
+
+	g_assert(step->type == TST_EVENT_CALL);
+	g_assert(step->call_func == (void (*)(void)) ofono_gprs_status_notify);
+
+	if (step->check_func != NULL)
+		((void (*)(struct ofono_gprs *, int)) step->check_func)(
+								gprs, status);
+
+	rilmodem_test_engine_next_step(gprs->engined);
 }
 
-OFONO_EVENT_CALL_ARG_1(ofono_gprs_register, struct ofono_gprs *)
-OFONO_EVENT_CALL_ARG_1(ofono_gprs_detached_notify, struct ofono_gprs *)
-OFONO_EVENT_CALL_ARG_2(ofono_gprs_status_notify, struct ofono_gprs *, int)
-OFONO_EVENT_CALL_ARG_2(ofono_gprs_bearer_notify, struct ofono_gprs *, int)
-OFONO_EVENT_CALL_ARG_3(ofono_gprs_set_cid_range, struct ofono_gprs *,
-						unsigned int, unsigned int)
-OFONO_EVENT_CALL_CB_ARG_2(ofono_gprs_cb, const struct ofono_error *,
-							struct ofono_gprs *)
-OFONO_EVENT_CALL_CB_ARG_3(ofono_gprs_status_cb, const struct ofono_error *,
-						int, struct ofono_gprs *)
+void ofono_gprs_detached_notify(struct ofono_gprs *gprs)
+{
+	const struct rilmodem_test_step *step;
+
+	step = rilmodem_test_engine_get_current_step(gprs->engined);
+
+	g_assert(step->type == TST_EVENT_CALL);
+	g_assert(step->call_func ==
+				(void (*)(void)) ofono_gprs_detached_notify);
+
+	rilmodem_test_engine_next_step(gprs->engined);
+}
+
+void ofono_gprs_bearer_notify(struct ofono_gprs *gprs, int bearer)
+{
+	const struct rilmodem_test_step *step;
+
+	step = rilmodem_test_engine_get_current_step(gprs->engined);
+
+	g_assert(step->type == TST_EVENT_CALL);
+	g_assert(step->call_func == (void (*)(void)) ofono_gprs_bearer_notify);
+
+	if (step->check_func != NULL)
+		((void (*)(struct ofono_gprs *, int)) step->check_func)(
+								gprs, bearer);
+
+	rilmodem_test_engine_next_step(gprs->engined);
+}
+
+void ofono_gprs_set_cid_range(struct ofono_gprs *gprs,
+				unsigned int min, unsigned int max)
+{
+	const struct rilmodem_test_step *step;
+
+	step = rilmodem_test_engine_get_current_step(gprs->engined);
+
+	g_assert(step->type == TST_EVENT_CALL);
+	g_assert(step->call_func == (void (*)(void)) ofono_gprs_set_cid_range);
+
+	if (step->check_func != NULL)
+		((void (*)(struct ofono_gprs *, unsigned int, unsigned int))
+					step->check_func)(gprs, min, max);
+
+	rilmodem_test_engine_next_step(gprs->engined);
+}
+
+struct ofono_modem *ofono_gprs_get_modem(struct ofono_gprs *gprs)
+{
+	return gprs->modem;
+}
+
+int ofono_modem_set_integer(struct ofono_modem *modem,
+				const char *key, int value)
+{
+	const struct rilmodem_test_step *step;
+
+	step = rilmodem_test_engine_get_current_step(modem->gprs->engined);
+
+	g_assert(step->type == TST_EVENT_CALL);
+	g_assert(step->call_func == (void (*)(void)) ofono_modem_set_integer);
+
+	if (step->check_func != NULL)
+		((void (*)(struct ofono_modem *, const char *, int))
+					step->check_func)(modem, key, value);
+
+	rilmodem_test_engine_next_step(modem->gprs->engined);
+
+	return 0;
+}
+
+void ofono_gprs_remove(struct ofono_gprs *gprs)
+{
+	const struct rilmodem_test_step *step;
+
+	step = rilmodem_test_engine_get_current_step(gprs->engined);
+
+	g_assert(step->type == TST_EVENT_CALL);
+	g_assert(step->call_func == (void (*)(void)) ofono_gprs_remove);
+
+	rilmodem_test_engine_next_step(gprs->engined);
+}
 
 /*
  * As all our architectures are little-endian except for
@@ -153,32 +253,29 @@ static const char parcel_rsp_data_registration_state_2_4[] = {
 	0x34, 0x00, 0x00, 0x00
 };
 
-static void set_cid_range_check_2_6(struct ofono_gprs *gprs,
+static void set_cid_range_check_2_5(struct ofono_gprs *gprs,
 					unsigned int min, unsigned int max)
 {
 	g_assert(min == 1);
 	g_assert(max == 2);
 }
 
-static void call_set_attached_2_7(gpointer data)
+static void gprs_cb_2_8(const struct ofono_error *error, void *data)
 {
 	struct ofono_gprs *gprs = data;
 
-	gprs_drv->set_attached(gprs, 0, ofono_gprs_cb, gprs);
+	g_assert(error->type == OFONO_ERROR_TYPE_NO_ERROR);
 
 	rilmodem_test_engine_next_step(gprs->engined);
 }
 
-/* Response, no error */
-static const char parcel_rsp_allow_data_2_8[] = {
-	0x00, 0x00, 0x00, 0x0C, 0x00, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00
-};
-
-static void check_set_attached_2_9(const struct ofono_error *error,
-						struct ofono_gprs *gprs)
+static void call_set_attached_2_7(gpointer data)
 {
-	g_assert(error->type == OFONO_ERROR_TYPE_NO_ERROR);
+	struct ofono_gprs *gprs = data;
+
+	gprs_drv->set_attached(gprs, 0, gprs_cb_2_8, gprs);
+
+	rilmodem_test_engine_next_step(gprs->engined);
 }
 
 /*
@@ -187,11 +284,10 @@ static void check_set_attached_2_9(const struct ofono_error *error,
  * Step 2: Harness answers with empty data call list
  * Step 3: Driver sends REQUEST_DATA_REGISTRATION_STATE
  * Step 4: Harness answers with status unregistered
- * Step 5: Driver calls ofono_gprs_register
- * Step 6: Driver calls ofono_gprs_set_cid_range
+ * Step 5: Driver calls ofono_gprs_set_cid_range
+ * Step 6: Driver calls ofono_gprs_register
  * Step 7: Harness calls drv->set_attached(false)
- * Step 8: Harness answers with no error
- * Step 9: Driver calls the callback specified in step 7
+ * Step 8: Driver calls the callback specified in step 7
  */
 static const struct rilmodem_test_step steps_test_2[] = {
 	{
@@ -216,27 +312,22 @@ static const struct rilmodem_test_step steps_test_2[] = {
 	},
 	{
 		.type = TST_EVENT_CALL,
-		.call_func = (void (*)(void)) ofono_gprs_register,
-		.check_func = NULL
+		.call_func = (void (*)(void)) ofono_gprs_set_cid_range,
+		.check_func = (void (*)(void)) set_cid_range_check_2_5
 	},
 	{
 		.type = TST_EVENT_CALL,
-		.call_func = (void (*)(void)) ofono_gprs_set_cid_range,
-		.check_func = (void (*)(void)) set_cid_range_check_2_6
+		.call_func = (void (*)(void)) ofono_gprs_register,
+		.check_func = NULL
 	},
 	{
 		.type = TST_ACTION_CALL,
 		.call_action = call_set_attached_2_7,
 	},
 	{
-		.type = TST_ACTION_SEND,
-		.parcel_data = parcel_rsp_allow_data_2_8,
-		.parcel_size = sizeof(parcel_rsp_allow_data_2_8)
-	},
-	{
 		.type = TST_EVENT_CALL,
-		.call_func = (void (*)(void)) ofono_gprs_cb,
-		.check_func = (void (*)(void)) check_set_attached_2_9
+		.call_func = (void (*)(void)) gprs_cb_2_8,
+		.check_func = NULL
 	},
 };
 
@@ -245,40 +336,29 @@ struct rilmodem_test_data test_2 = {
 	.num_steps = G_N_ELEMENTS(steps_test_2)
 };
 
-static void call_set_attached_3_7(gpointer data)
+static void gprs_cb_3_8(const struct ofono_error *error, void *data)
 {
 	struct ofono_gprs *gprs = data;
 
-	gprs_drv->set_attached(gprs, 1, ofono_gprs_cb, gprs);
+	g_assert(error->type == OFONO_ERROR_TYPE_NO_ERROR);
 
 	rilmodem_test_engine_next_step(gprs->engined);
 }
 
-/* REQUEST_ALLOW_DATA, seq 3, set to try to attach */
-static const char parcel_req_allow_data_3_8[] = {
-	0x00, 0x00, 0x00, 0x10, 0x7B, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00,
- 	0x01, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00
-};
-
-/* Response, no error */
-static const char parcel_rsp_allow_data_3_9[] = {
-	0x00, 0x00, 0x00, 0x0C, 0x00, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00
-};
-
-static void check_set_attached_3_10(const struct ofono_error *error,
-						struct ofono_gprs *gprs)
+static void call_set_attached_3_7(gpointer data)
 {
-	g_assert(error->type == OFONO_ERROR_TYPE_NO_ERROR);
+	struct ofono_gprs *gprs = data;
+
+	gprs_drv->set_attached(gprs, 1, gprs_cb_3_8, gprs);
+
+	rilmodem_test_engine_next_step(gprs->engined);
 }
 
 /*
  * --- TEST 3 ---
  * Steps 1-6: Same as in test 2
  * Step 7: Harness calls drv->set_attached(true)
- * Step 8: Driver sends REQUEST_ALLOW_DATA
- * Step 9: Harness answers with no error
- * Step 10: Driver calls the callback specified in step 7
+ * Step 8: Driver calls the callback specified in step 7
  */
 static const struct rilmodem_test_step steps_test_3[] = {
 	{
@@ -303,32 +383,22 @@ static const struct rilmodem_test_step steps_test_3[] = {
 	},
 	{
 		.type = TST_EVENT_CALL,
-		.call_func = (void (*)(void)) ofono_gprs_register,
-		.check_func = NULL
+		.call_func = (void (*)(void)) ofono_gprs_set_cid_range,
+		.check_func = (void (*)(void)) set_cid_range_check_2_5
 	},
 	{
 		.type = TST_EVENT_CALL,
-		.call_func = (void (*)(void)) ofono_gprs_set_cid_range,
-		.check_func = (void (*)(void)) set_cid_range_check_2_6
+		.call_func = (void (*)(void)) ofono_gprs_register,
+		.check_func = NULL
 	},
 	{
 		.type = TST_ACTION_CALL,
 		.call_action = call_set_attached_3_7,
 	},
 	{
-		.type = TST_EVENT_RECEIVE,
-		.parcel_data = parcel_req_allow_data_3_8,
-		.parcel_size = sizeof(parcel_req_allow_data_3_8)
-	},
-	{
-		.type = TST_ACTION_SEND,
-		.parcel_data = parcel_rsp_allow_data_3_9,
-		.parcel_size = sizeof(parcel_rsp_allow_data_3_9)
-	},
-	{
 		.type = TST_EVENT_CALL,
-		.call_func = (void (*)(void)) ofono_gprs_cb,
-		.check_func = (void (*)(void)) check_set_attached_3_10
+		.call_func = (void (*)(void)) gprs_cb_3_8,
+		.check_func = NULL
 	},
 };
 
@@ -337,14 +407,6 @@ struct rilmodem_test_data test_3 = {
 	.num_steps = G_N_ELEMENTS(steps_test_3)
 };
 
-static void call_registration_status_4_7(gpointer data)
-{
-	struct ofono_gprs *gprs = data;
-
-	gprs_drv->attached_status(gprs, ofono_gprs_status_cb, gprs);
-
-	rilmodem_test_engine_next_step(gprs->engined);
-}
 
 /* REQUEST_DATA_REGISTRATION_STATE, seq 3 */
 static const char parcel_req_registration_state_4_8[] = {
@@ -363,20 +425,46 @@ static const char parcel_rsp_registration_state_4_9[] = {
 	0x34, 0x00, 0x00, 0x00
 };
 
-static void gprs_bearer_check_4_10(struct ofono_gprs *gprs, int bearer)
+static void reg_state_cb_4_12(const struct ofono_error *error,
+							int status, void *data)
 {
-	g_assert(bearer == PACKET_BEARER_GPRS);
-}
+	struct ofono_gprs *gprs = data;
+	const struct rilmodem_test_step *step;
 
-static void check_attached_status_4_11(const struct ofono_error *error,
-					int status, struct ofono_gprs *gprs)
-{
+	step = rilmodem_test_engine_get_current_step(gprs->engined);
+
+	g_assert(step->type == TST_EVENT_CALL);
+	g_assert(step->call_func == (void (*)(void)) reg_state_cb_4_12);
+
 	g_assert(error->type == OFONO_ERROR_TYPE_NO_ERROR);
 	/*
 	 * Driver returns unregistered even though network state is attached
 	 * because we did not set attach to true in this test case.
 	 */
 	g_assert(status == NETWORK_REGISTRATION_STATUS_NOT_REGISTERED);
+
+	rilmodem_test_engine_next_step(gprs->engined);
+}
+
+static void call_registration_status_4_7(gpointer data)
+{
+	struct ofono_gprs *gprs = data;
+
+	gprs_drv->attached_status(gprs, reg_state_cb_4_12, gprs);
+
+	rilmodem_test_engine_next_step(gprs->engined);
+}
+
+static void set_integer_check_4_10(struct ofono_modem *modem,
+						const char *key, int value)
+{
+	g_assert_cmpstr(key, ==, "RilDataRadioTechnology");
+	g_assert(value == RADIO_TECH_GPRS);
+}
+
+static void gprs_bearer_check_4_11(struct ofono_gprs *gprs, int bearer)
+{
+	g_assert(bearer == PACKET_BEARER_GPRS);
 }
 
 /*
@@ -385,8 +473,9 @@ static void check_attached_status_4_11(const struct ofono_error *error,
  * Step 7: Harness calls drv->registration_status
  * Step 8: Driver sends REQUEST_DATA_REGISTRATION_STATE
  * Step 9: Harness answers saying status is registered
- * Step 10: Driver calls ofono_gprs_bearer_notify(PACKET_BEARER_GPRS)
- * Step 11: Driver calls the callback specified in step 7
+ * Step 10: Driver calls ofono_modem_set_integer
+ * Step 11: Driver calls ofono_gprs_bearer_notify(PACKET_BEARER_GPRS)
+ * Step 12: Driver calls the callback specified in step 7
  */
 static const struct rilmodem_test_step steps_test_4[] = {
 	{
@@ -411,13 +500,13 @@ static const struct rilmodem_test_step steps_test_4[] = {
 	},
 	{
 		.type = TST_EVENT_CALL,
-		.call_func = (void (*)(void)) ofono_gprs_register,
-		.check_func = NULL
+		.call_func = (void (*)(void)) ofono_gprs_set_cid_range,
+		.check_func = (void (*)(void)) set_cid_range_check_2_5
 	},
 	{
 		.type = TST_EVENT_CALL,
-		.call_func = (void (*)(void)) ofono_gprs_set_cid_range,
-		.check_func = (void (*)(void)) set_cid_range_check_2_6
+		.call_func = (void (*)(void)) ofono_gprs_register,
+		.check_func = NULL
 	},
 	{
 		.type = TST_ACTION_CALL,
@@ -435,13 +524,18 @@ static const struct rilmodem_test_step steps_test_4[] = {
 	},
 	{
 		.type = TST_EVENT_CALL,
-		.call_func = (void (*)(void)) ofono_gprs_bearer_notify,
-		.check_func = (void (*)(void)) gprs_bearer_check_4_10
+		.call_func = (void (*)(void)) ofono_modem_set_integer,
+		.check_func = (void (*)(void)) set_integer_check_4_10
 	},
 	{
 		.type = TST_EVENT_CALL,
-		.call_func = (void (*)(void)) ofono_gprs_status_cb,
-		.check_func = (void (*)(void)) check_attached_status_4_11
+		.call_func = (void (*)(void)) ofono_gprs_bearer_notify,
+		.check_func = (void (*)(void)) gprs_bearer_check_4_11
+	},
+	{
+		.type = TST_EVENT_CALL,
+		.call_func = (void (*)(void)) reg_state_cb_4_12,
+		.check_func = NULL
 	},
 };
 
@@ -451,18 +545,18 @@ struct rilmodem_test_data test_4 = {
 };
 
 /* UNSOL_RESPONSE_VOICE_NETWORK_STATE_CHANGED */
-static const char parcel_ev_network_state_changed_5_11[] = {
+static const char parcel_ev_network_state_changed_5_9[] = {
 	0x00, 0x00, 0x00, 0x08, 0x01, 0x00, 0x00, 0x00, 0xEA, 0x03, 0x00, 0x00
 };
 
-/* REQUEST_DATA_REGISTRATION_STATE, seq 4 */
-static const char parcel_req_registration_state_5_12[] = {
-	0x00, 0x00, 0x00, 0x08, 0x15, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00
+/* REQUEST_DATA_REGISTRATION_STATE, seq 3 */
+static const char parcel_req_registration_state_5_10[] = {
+	0x00, 0x00, 0x00, 0x08, 0x15, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00
 };
 
 /* Response, no error, {registered,0xb08,0x10e1,GPRS,(null),4} */
-static const char parcel_rsp_registration_state_5_13[] = {
-	0x00, 0x00, 0x00, 0x54, 0x00, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00,
+static const char parcel_rsp_registration_state_5_11[] = {
+	0x00, 0x00, 0x00, 0x54, 0x00, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00,
 	0x00, 0x00, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00,
 	0x31, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x30, 0x00, 0x62, 0x00,
 	0x30, 0x00, 0x38, 0x00, 0x00, 0x00, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00,
@@ -472,25 +566,32 @@ static const char parcel_rsp_registration_state_5_13[] = {
 	0x34, 0x00, 0x00, 0x00
 };
 
-static void gprs_status_check_5_14(struct ofono_gprs *gprs, int status)
+static void gprs_status_check_5_12(struct ofono_gprs *gprs, int status)
 {
 	g_assert(status == NETWORK_REGISTRATION_STATUS_REGISTERED);
 }
 
+static void set_integer_check_5_13(struct ofono_modem *modem,
+						const char *key, int value)
+{
+	g_assert_cmpstr(key, ==, "RilDataRadioTechnology");
+	g_assert(value == RADIO_TECH_GPRS);
+}
 
-static void gprs_bearer_check_5_15(struct ofono_gprs *gprs, int bearer)
+static void gprs_bearer_check_5_14(struct ofono_gprs *gprs, int bearer)
 {
 	g_assert(bearer == PACKET_BEARER_GPRS);
 }
 
 /*
  * --- TEST 5 ---
- * Steps 1-10: Same as test 3
- * Step 11: Harness sends UNSOL_RESPONSE_VOICE_NETWORK_STATE_CHANGED
- * Step 12: Driver sends REQUEST_DATA_REGISTRATION_STATE
- * Step 13: Harness answers saying status is registered
- * Step 14: Driver calls ofono_gprs_status_notify(REGISTERED)
- * Step 15: Driver calls ofono_gprs_bearer_notify(PACKET_BEARER_GPRS)
+ * Steps 1-8: Same as test 3
+ * Step 9: Harness sends UNSOL_RESPONSE_VOICE_NETWORK_STATE_CHANGED
+ * Step 10: Driver sends REQUEST_DATA_REGISTRATION_STATE
+ * Step 11: Harness answers saying status is registered
+ * Step 12: Driver calls ofono_gprs_status_notify(REGISTERED)
+ * Step 13: Driver calls ofono_modem_set_integer
+ * Step 14: Driver calls ofono_gprs_bearer_notify(PACKET_BEARER_GPRS)
  */
 static const struct rilmodem_test_step steps_test_5[] = {
 	{
@@ -515,57 +616,52 @@ static const struct rilmodem_test_step steps_test_5[] = {
 	},
 	{
 		.type = TST_EVENT_CALL,
-		.call_func = (void (*)(void)) ofono_gprs_register,
-		.check_func = NULL
+		.call_func = (void (*)(void)) ofono_gprs_set_cid_range,
+		.check_func = (void (*)(void)) set_cid_range_check_2_5
 	},
 	{
 		.type = TST_EVENT_CALL,
-		.call_func = (void (*)(void)) ofono_gprs_set_cid_range,
-		.check_func = (void (*)(void)) set_cid_range_check_2_6
+		.call_func = (void (*)(void)) ofono_gprs_register,
+		.check_func = NULL
 	},
 	{
 		.type = TST_ACTION_CALL,
 		.call_action = call_set_attached_3_7,
 	},
 	{
-		.type = TST_EVENT_RECEIVE,
-		.parcel_data = parcel_req_allow_data_3_8,
-		.parcel_size = sizeof(parcel_req_allow_data_3_8)
-	},
-	{
-		.type = TST_ACTION_SEND,
-		.parcel_data = parcel_rsp_allow_data_3_9,
-		.parcel_size = sizeof(parcel_rsp_allow_data_3_9)
-	},
-	{
 		.type = TST_EVENT_CALL,
-		.call_func = (void (*)(void)) ofono_gprs_cb,
-		.check_func = (void (*)(void)) check_set_attached_3_10
+		.call_func = (void (*)(void)) gprs_cb_3_8,
+		.check_func = NULL
 	},
 	{
 		.type = TST_ACTION_SEND,
-		.parcel_data = parcel_ev_network_state_changed_5_11,
-		.parcel_size = sizeof(parcel_ev_network_state_changed_5_11)
+		.parcel_data = parcel_ev_network_state_changed_5_9,
+		.parcel_size = sizeof(parcel_ev_network_state_changed_5_9)
 	},
 	{
 		.type = TST_EVENT_RECEIVE,
-		.parcel_data = parcel_req_registration_state_5_12,
-		.parcel_size = sizeof(parcel_req_registration_state_5_12)
+		.parcel_data = parcel_req_registration_state_5_10,
+		.parcel_size = sizeof(parcel_req_registration_state_5_10)
 	},
 	{
 		.type = TST_ACTION_SEND,
-		.parcel_data = parcel_rsp_registration_state_5_13,
-		.parcel_size = sizeof(parcel_rsp_registration_state_5_13)
+		.parcel_data = parcel_rsp_registration_state_5_11,
+		.parcel_size = sizeof(parcel_rsp_registration_state_5_11)
 	},
 	{
 		.type = TST_EVENT_CALL,
 		.call_func = (void (*)(void)) ofono_gprs_status_notify,
-		.check_func = (void (*)(void)) gprs_status_check_5_14
+		.check_func = (void (*)(void)) gprs_status_check_5_12
+	},
+	{
+		.type = TST_EVENT_CALL,
+		.call_func = (void (*)(void)) ofono_modem_set_integer,
+		.check_func = (void (*)(void)) set_integer_check_5_13
 	},
 	{
 		.type = TST_EVENT_CALL,
 		.call_func = (void (*)(void)) ofono_gprs_bearer_notify,
-		.check_func = (void (*)(void)) gprs_bearer_check_5_15
+		.check_func = (void (*)(void)) gprs_bearer_check_5_14
 	},
 };
 
@@ -577,7 +673,6 @@ struct rilmodem_test_data test_5 = {
 static void server_connect_cb(gpointer data)
 {
 	struct ofono_gprs *gprs = data;
-	struct ril_gprs_driver_data gprs_drv_data = { gprs->ril, NULL };
 	int retval;
 
 	/*
@@ -585,7 +680,7 @@ static void server_connect_cb(gpointer data)
 	 * to retrieve currently active data calls. Test steps must start from
 	 * there.
 	 */
-	retval = gprs_drv->probe(gprs, OFONO_RIL_VENDOR_AOSP, &gprs_drv_data);
+	retval = gprs_drv->probe(gprs, OFONO_RIL_VENDOR_AOSP, gprs->ril);
 	g_assert(retval == 0);
 }
 
@@ -602,10 +697,15 @@ static void test_function(gconstpointer data)
 {
 	const struct rilmodem_test_data *test_data = data;
 	struct ofono_gprs *gprs;
+	struct ofono_modem *modem;
 
 	ril_gprs_init();
 
 	gprs = g_malloc0(sizeof(*gprs));
+	modem = g_malloc0(sizeof(*modem));
+
+	modem->gprs = gprs;
+	gprs->modem = modem;
 
 	gprs->engined = rilmodem_test_engine_create(&server_connect_cb,
 							test_data, gprs);
@@ -614,14 +714,12 @@ static void test_function(gconstpointer data)
 							OFONO_RIL_VENDOR_AOSP);
 	g_assert(gprs->ril != NULL);
 
-	/* So the driver is allowed to send ALLOW_DATA */
-	g_ril_set_version(gprs->ril, 10);
-
 	/* Perform test */
 	rilmodem_test_engine_start(gprs->engined);
 
 	gprs_drv->remove(gprs);
 	g_ril_unref(gprs->ril);
+	g_free(modem);
 	g_free(gprs);
 
 	rilmodem_test_engine_remove(gprs->engined);

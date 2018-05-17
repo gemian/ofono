@@ -466,7 +466,8 @@ static void mw_mwis_read_cb(int ok, int total_length, int record,
 	struct mailbox_state info;
 
 	if (!ok || record_length < 5) {
-		ofono_error("Unable to read waiting messages numbers from SIM ok: %d, rl: %d", ok, record_length);
+		ofono_error("Unable to read waiting messages numbers "
+				"from SIM");
 
 		mw->efmwis_length = 0;
 
@@ -623,7 +624,8 @@ static void mw_mbi_read_cb(int ok, int total_length, int record,
 	int i, err;
 
 	if (!ok || record_length < 4) {
-		ofono_error("Unable to read mailbox identifies from SIM, ok: %d, rl: %d", ok, record_length);
+		ofono_error("Unable to read mailbox identifies "
+				"from SIM");
 
 		mw->efmbdn_length = 0;
 		mw->mbdn_not_provided = TRUE;
@@ -985,7 +987,6 @@ static void mw_mwis_changed(int id, void *userdata)
 	struct ofono_message_waiting *mw = userdata;
 
 	mw->efmwis_length = 0;
-	ofono_error("mw_mwis_changed");
 
 	ofono_sim_read(mw->sim_context, SIM_EFMWIS_FILEID,
 			OFONO_SIM_FILE_STRUCTURE_FIXED,
@@ -1050,8 +1051,6 @@ void ofono_message_waiting_register(struct ofono_message_waiting *mw)
 	if (mw->sim) {
 		/* Assume that if sim atom exists, it is ready */
 		mw->sim_context = ofono_sim_context_create(mw->sim);
-
-        ofono_error("ofono_message_waiting_register");
 
 		/* Loads MWI states and MBDN from SIM */
 		ofono_sim_read(mw->sim_context, SIM_EFMWIS_FILEID,

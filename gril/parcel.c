@@ -200,6 +200,27 @@ char *parcel_r_string(struct parcel *p)
 	return ret;
 }
 
+void parcel_skip_string(struct parcel *p)
+{
+	int len16 = parcel_r_int32(p);
+	int strbytes;
+
+	if (p->malformed)
+		return;
+
+	/* This is how a null string is sent */
+	if (len16 < 0)
+		return;
+
+	strbytes = PAD_SIZE((len16 + 1) * sizeof(char16_t));
+	if (p->offset + strbytes > p->size) {
+		p->malformed = 1;
+		return;
+	}
+
+	p->offset += strbytes;
+}
+
 int parcel_w_raw(struct parcel *p, const void *data, size_t len)
 {
 	if (data == NULL) {
@@ -257,37 +278,24 @@ size_t parcel_data_avail(struct parcel *p)
 	return p->size - p->offset;
 }
 
-struct parcel_str_array *parcel_r_str_array(struct parcel *p)
+char **parcel_r_strv(struct parcel *p)
 {
 	int i;
-	struct parcel_str_array *str_arr;
 	int num_str = parcel_r_int32(p);
+	char **strv;
 
 	if (p->malformed || num_str <= 0)
 		return NULL;
 
-	str_arr = g_try_malloc0(sizeof(*str_arr) + num_str * sizeof(char *));
-	if (str_arr == NULL)
-		return NULL;
+	strv = g_new0(char *, num_str + 1);
 
-	str_arr->num_str = num_str;
-	for (i = 0; i < num_str; ++i)
-		str_arr->str[i] = parcel_r_string(p);
+	for (i = 0; i < num_str; i++)
+		strv[i] = parcel_r_string(p);
 
 	if (p->malformed) {
-		parcel_free_str_array(str_arr);
-		return NULL;
+		g_strfreev(strv);
+		strv = NULL;
 	}
 
-	return str_arr;
-}
-
-void parcel_free_str_array(struct parcel_str_array *str_arr)
-{
-	if (str_arr) {
-		int i;
-		for (i = 0; i < str_arr->num_str; ++i)
-			g_free(str_arr->str[i]);
-		g_free(str_arr);
-	}
+	return strv;
 }

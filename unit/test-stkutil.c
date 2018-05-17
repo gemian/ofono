@@ -16868,6 +16868,7 @@ static const struct terminal_response_test get_input_response_data_181 = {
 };
 
 static const struct terminal_response_test get_input_response_data_191 = {
+	/* Either get_input_response_191a or get_input_response_191b is ok */
 	.pdu = get_input_response_191a,
 	.pdu_len = sizeof(get_input_response_191a),
 	.response = {

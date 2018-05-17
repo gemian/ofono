@@ -119,7 +119,7 @@ static DBusMessage *smart_messaging_register_agent(DBusConnection *conn,
 					DBUS_TYPE_INVALID) == FALSE)
 		return __ofono_error_invalid_args(msg);
 
-	if (!__ofono_dbus_valid_object_path(agent_path))
+	if (!dbus_validate_path(agent_path, NULL))
 		return __ofono_error_invalid_format(msg);
 
 	sm->agent = sms_agent_new(AGENT_INTERFACE,
@@ -216,8 +216,7 @@ static DBusMessage *smart_messaging_send_vcard(DBusConnection *conn,
 	err = __ofono_sms_txq_submit(sm->sms, msg_list, flags, &uuid,
 					message_queued, msg);
 
-	g_slist_foreach(msg_list, (GFunc)g_free, NULL);
-	g_slist_free(msg_list);
+	g_slist_free_full(msg_list, g_free);
 
 	if (err < 0)
 		return __ofono_error_failed(msg);
@@ -259,8 +258,7 @@ static DBusMessage *smart_messaging_send_vcal(DBusConnection *conn,
 	err = __ofono_sms_txq_submit(sm->sms, msg_list, flags, &uuid,
 					message_queued, msg);
 
-	g_slist_foreach(msg_list, (GFunc)g_free, NULL);
-	g_slist_free(msg_list);
+	g_slist_free_full(msg_list, g_free);
 
 	if (err < 0)
 		return __ofono_error_failed(msg);

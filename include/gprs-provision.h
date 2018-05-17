@@ -31,6 +31,8 @@ extern "C" {
 struct ofono_gprs_provision_data {
 	enum ofono_gprs_context_type type;
 	enum ofono_gprs_proto proto;
+	char *provider_name;
+	ofono_bool_t provider_primary;
 	char *name;
 	char *apn;
 	char *username;
@@ -44,7 +46,6 @@ struct ofono_gprs_provision_driver {
 	const char *name;
 	int priority;
 	int (*get_settings)(const char *mcc, const char *mnc, const char *spn,
-				const char *imsi, const char *gid1,
 				struct ofono_gprs_provision_data **settings,
 				int *count);
 };

@@ -20,6 +20,8 @@
  *
  */
 
+#include "rilutil.h"
+
 #define RILMODEM "rilmodem"
 
 /* Shared constants */
@@ -67,3 +69,15 @@ extern void ril_call_barring_exit(void);
 
 extern void ril_phonebook_init(void);
 extern void ril_phonebook_exit(void);
+
+extern void ril_netmon_init(void);
+extern void ril_netmon_exit(void);
+
+extern void ril_stk_init(void);
+extern void ril_stk_exit(void);
+
+extern void ril_cbs_init(void);
+extern void ril_cbs_exit(void);
+
+extern void ril_lte_init(void);
+extern void ril_lte_exit(void);

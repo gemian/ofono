@@ -36,6 +36,7 @@ void  __ofono_gprs_provision_free_settings(
 	int i;
 
 	for (i = 0; i < count; i++) {
+		g_free(settings[i].provider_name);
 		g_free(settings[i].name);
 		g_free(settings[i].apn);
 		g_free(settings[i].username);
@@ -49,7 +50,6 @@ void  __ofono_gprs_provision_free_settings(
 
 ofono_bool_t __ofono_gprs_provision_get_settings(const char *mcc,
 				const char *mnc, const char *spn,
-				const char *imsi, const char *gid1,
 				struct ofono_gprs_provision_data **settings,
 				int *count)
 {
@@ -66,8 +66,7 @@ ofono_bool_t __ofono_gprs_provision_get_settings(const char *mcc,
 
 		DBG("Calling provisioning plugin '%s'", driver->name);
 
-		if (driver->get_settings(mcc, mnc, spn, imsi, gid1, settings,
-						count) < 0)
+		if (driver->get_settings(mcc, mnc, spn, settings, count) < 0)
 			continue;
 
 		return TRUE;

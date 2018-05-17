@@ -38,8 +38,9 @@ void __ofono_modem_shutdown(void);
 #include <ofono/log.h>
 
 int __ofono_log_init(const char *program, const char *debug,
-						ofono_bool_t detach);
-void __ofono_log_cleanup(void);
+						ofono_bool_t detach,
+						ofono_bool_t backtrace);
+void __ofono_log_cleanup(ofono_bool_t backtrace);
 void __ofono_log_enable(struct ofono_debug_desc *start,
 					struct ofono_debug_desc *stop);
 
@@ -76,8 +77,6 @@ DBusMessage *__ofono_error_from_error(const struct ofono_error *error,
 
 void __ofono_dbus_pending_reply(DBusMessage **msg, DBusMessage *reply);
 
-gboolean __ofono_dbus_valid_object_path(const char *path);
-
 struct ofono_watchlist_item {
 	unsigned int id;
 	void *notify;
@@ -102,6 +101,12 @@ void __ofono_watchlist_free(struct ofono_watchlist *watchlist);
 
 int __ofono_plugin_init(const char *pattern, const char *exclude);
 void __ofono_plugin_cleanup(void);
+
+void __ofono_plugin_foreach(void (*fn) (struct ofono_plugin_desc *desc,
+			int flags, void *user_data), void *user_data);
+
+#define OFONO_PLUGIN_FLAG_BUILTIN (0x01)
+#define OFONO_PLUGIN_FLAG_ACTIVE  (0x02)
 
 #include <ofono/modem.h>
 
@@ -152,6 +157,8 @@ enum ofono_atom_type {
 	OFONO_ATOM_TYPE_CDMA_NETREG,
 	OFONO_ATOM_TYPE_HANDSFREE,
 	OFONO_ATOM_TYPE_SIRI,
+	OFONO_ATOM_TYPE_NETMON,
+	OFONO_ATOM_TYPE_LTE,
 };
 
 enum ofono_atom_watch_condition {
@@ -264,7 +271,14 @@ gboolean __ofono_call_settings_is_busy(struct ofono_call_settings *cs);
 #include <ofono/devinfo.h>
 #include <ofono/phonebook.h>
 #include <ofono/gprs.h>
+
+gboolean __ofono_gprs_get_roaming_allowed(struct ofono_gprs *gprs);
+
 #include <ofono/gprs-context.h>
+
+const struct ofono_gprs_primary_context *__ofono_gprs_context_settings_by_type
+		(struct ofono_gprs *gprs, enum ofono_gprs_context_type type);
+
 #include <ofono/radio-settings.h>
 #include <ofono/audio-settings.h>
 #include <ofono/ctm.h>
@@ -384,6 +398,9 @@ void __ofono_sim_refresh(struct ofono_sim *sim, GSList *file_list,
 
 void __ofono_sim_recheck_pin(struct ofono_sim *sim);
 
+enum ofono_sim_password_type __ofono_sim_puk2pin(
+					enum ofono_sim_password_type type);
+
 #include <ofono/stk.h>
 
 typedef void (*__ofono_sms_sim_download_cb_t)(ofono_bool_t ok,
@@ -498,7 +515,6 @@ void __ofono_nettime_info_received(struct ofono_modem *modem,
 #include <ofono/gprs-provision.h>
 ofono_bool_t __ofono_gprs_provision_get_settings(const char *mcc,
 				const char *mnc, const char *spn,
-				const char *imsi, const char *gid1,
 				struct ofono_gprs_provision_data **settings,
 				int *count);
 void __ofono_gprs_provision_free_settings(
@@ -513,7 +529,7 @@ enum ofono_emulator_slc_condition {
 	OFONO_EMULATOR_SLC_CONDITION_BIND,
 };
 
-void __ofono_emulator_set_indicator_forced(struct ofono_atom *atom,
+void __ofono_emulator_set_indicator_forced(struct ofono_emulator *em,
 						const char *name, int value);
 void __ofono_emulator_slc_condition(struct ofono_emulator *em,
 					enum ofono_emulator_slc_condition cond);
@@ -531,9 +547,73 @@ void __ofono_private_network_release(int id);
 ofono_bool_t __ofono_private_network_request(ofono_private_network_cb_t cb,
 						int *id, void *data);
 
+#include <ofono/sms-filter.h>
+
+struct sms_filter_chain;
+struct sms_address;
+struct sms_scts;
+enum sms_class;
+
+typedef void (*sms_send_text_cb_t)(struct ofono_sms *sms,
+		const struct sms_address *addr, const char *text, void *data);
+
+typedef void (*sms_dispatch_recv_text_cb_t)
+	(struct ofono_sms *sms, const struct ofono_uuid *uuid,
+		const char *message, enum sms_class cls,
+		const struct sms_address *addr, const struct sms_scts *scts);
+
+typedef void (*sms_dispatch_recv_datagram_cb_t)
+	(struct ofono_sms *sms, const struct ofono_uuid *uuid,
+		int dst, int src, const unsigned char *buf, unsigned int len,
+		const struct sms_address *addr, const struct sms_scts *scts);
+
+struct sms_filter_chain *__ofono_sms_filter_chain_new(struct ofono_sms *sms,
+						struct ofono_modem *modem);
+void __ofono_sms_filter_chain_free(struct sms_filter_chain *chain);
+
+void __ofono_sms_filter_chain_send_text(struct sms_filter_chain *chain,
+		const struct sms_address *addr, const char *text,
+		sms_send_text_cb_t sender, ofono_destroy_func destroy,
+		void *data);
+
+/* Does g_free(buf) when done */
+void __ofono_sms_filter_chain_recv_datagram(struct sms_filter_chain *chain,
+		const struct ofono_uuid *uuid, int dst_port, int src_port,
+		unsigned char *buf, unsigned int len,
+		const struct sms_address *addr, const struct sms_scts *scts,
+		sms_dispatch_recv_datagram_cb_t default_handler);
+
+/* Does g_free(message) when done */
+void __ofono_sms_filter_chain_recv_text(struct sms_filter_chain *chain,
+		const struct ofono_uuid *uuid, char *message,
+		enum sms_class cls, const struct sms_address *addr,
+		const struct sms_scts *scts,
+		sms_dispatch_recv_text_cb_t default_handler);
+
+#include <ofono/gprs-filter.h>
+
+struct gprs_filter_chain;
+
+typedef void (*gprs_filter_activate_cb_t)
+	(const struct ofono_gprs_primary_context *ctx, void *user_data);
+typedef void (*gprs_filter_check_cb_t)(ofono_bool_t allow, void *user_data);
+struct gprs_filter_chain *__ofono_gprs_filter_chain_new(struct ofono_gprs *gp);
+void __ofono_gprs_filter_chain_free(struct gprs_filter_chain *chain);
+void __ofono_gprs_filter_chain_cancel(struct gprs_filter_chain *chain,
+		struct ofono_gprs_context *gc);
+void __ofono_gprs_filter_chain_activate(struct gprs_filter_chain *chain,
+		struct ofono_gprs_context *gc,
+		const struct ofono_gprs_primary_context *ctx,
+		gprs_filter_activate_cb_t act, ofono_destroy_func destroy,
+		void *user_data);
+void __ofono_gprs_filter_chain_check(struct gprs_filter_chain *chain,
+		gprs_filter_check_cb_t cb, ofono_destroy_func destroy,
+		void *user_data);
+
 #include <ofono/sim-mnclength.h>
 
 int __ofono_sim_mnclength_get_mnclength(const char *imsi);
+int mnclength(int mcc, int mnc);
 
-int __ofono_wakelock_init(void);
-void __ofono_wakelock_cleanup(void);
+#include <ofono/netmon.h>
+#include <ofono/lte.h>

@@ -24,7 +24,6 @@
 #include <config.h>
 #endif
 
-#include <errno.h>
 #include <string.h>
 #include <glib.h>
 #include "ofono.h"
@@ -35,7 +34,7 @@ static GSList *g_drivers = NULL;
 int __ofono_sim_mnclength_get_mnclength(const char *imsi)
 {
 	GSList *d;
-	int mnclen = -ENOTSUP;
+	int mnclen;
 
 	for (d = g_drivers; d != NULL; d = d->next) {
 		const struct ofono_sim_mnclength_driver *driver = d->data;
@@ -45,14 +44,13 @@ int __ofono_sim_mnclength_get_mnclength(const char *imsi)
 
 		DBG("Calling mnclength plugin '%s'", driver->name);
 
-		mnclen = driver->get_mnclength(imsi);
-		if (mnclen <= 0)
+		if ((mnclen = driver->get_mnclength(imsi)) <= 0)
 			continue;
 
 		return mnclen;
 	}
 
-	return mnclen;
+	return 0;
 }
 
 int ofono_sim_mnclength_driver_register(

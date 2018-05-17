@@ -106,7 +106,7 @@ Properties	boolean Attached [readonly]
 			GPRS service registration (if known).
 
 			Possible values are:
-			"none", "gsm", "edge", "umts", "hsdpa", "hsupa",
+			"none", "gprs", "edge", "umts", "hsdpa", "hsupa",
 			"hspa" (HSDPA and HSUPA at the same time) and
 			"lte"
 
@@ -165,6 +165,15 @@ Methods		dict GetProperties()
 					 [service].Error.AttachInProgress
 					 [service].Error.NotImplemented
 
+Methods		void ProvisionContext()
+			Resets all properties back to default. Fails to make
+			any changes to the context if it is active or in the
+			process of being activated or deactivated.
+
+			Possible Errors: [service].Error.Failed
+					 [service].Error.InProgress
+					 [service].Error.NotAvailable
+
 Signals		PropertyChanged(string property, variant value)
 
 			This signal indicates a changed value of the given
@@ -189,7 +198,6 @@ Properties	boolean Active [readwrite]
 				"mms" - Used by MMS related services
 				"wap" - Used by WAP related services
 				"ims" - Used by IMS related services
-				"ia" - Used by IA related services
 
 		string AuthenticationMethod [readwrite]
 			Holds the PPP authentication method to use.  Valid
@@ -217,14 +225,6 @@ Properties	boolean Active [readwrite]
 			The name is a free form string that describes this
 			context.  The name should not be empty and limited
 			to a short string for display purposes.
-
-		boolean Preferred [readwrite]
-
-			Holds a boolean.  This value is meant to be used by
-			clients to store an indication on whether this context
-			is preferred compared to others.  ofono just stores and
-			shows this value, but does not use it internally. The
-			exact way in which this is used depends on the clients.
 
 		dict Settings [readonly, optional]
 

@@ -31,13 +31,13 @@
 
 #include <glib.h>
 
+#include <ofono/handsfree-audio.h>
+
 #include "ofono.h"
 #include "common.h"
 #include "hfp.h"
 #include "gatserver.h"
 #include "gatppp.h"
-#include "handsfree-audio.h"
-#include "system-settings.h"
 
 #define RING_TIMEOUT 3
 
@@ -50,16 +50,8 @@ struct hfp_codec_info {
 	ofono_bool_t supported;
 };
 
-struct atom_callback {
-	struct ofono_atom *atom;
-	ofono_emulator_request_cb_t cb;
-	void *data;
-	ofono_destroy_func destroy;
-};
-
 struct ofono_emulator {
-	GSList *atoms;
-	struct ofono_atom *active_atom;
+	struct ofono_atom *atom;
 	enum ofono_emulator_type type;
 	GAtServer *server;
 	GAtPPP *ppp;
@@ -76,8 +68,6 @@ struct ofono_emulator {
 	ofono_emulator_codec_negotiation_cb codec_negotiation_cb;
 	void *codec_negotiation_data;
 	ofono_bool_t bac_received;
-	/* Table of atom_callback, using prefixes as key */
-	GHashTable *prefixes;
 	bool slc : 1;
 	unsigned int events_mode : 2;
 	bool events_ind : 1;
@@ -365,13 +355,8 @@ static struct indicator *find_indicator(struct ofono_emulator *em,
 static struct ofono_call *find_call_with_status(struct ofono_emulator *em,
 								int status)
 {
-	struct ofono_modem *modem;
+	struct ofono_modem *modem = __ofono_atom_get_modem(em->atom);
 	struct ofono_voicecall *vc;
-
-	if (em->active_atom == NULL)
-		return NULL;
-
-	modem = __ofono_atom_get_modem(em->active_atom);
 
 	vc = __ofono_atom_find(OFONO_ATOM_TYPE_VOICECALL, modem);
 	if (vc == NULL)
@@ -1163,35 +1148,12 @@ static void emulator_add_indicator(struct ofono_emulator *em, const char* name,
 	em->indicators = g_slist_append(em->indicators, ind);
 }
 
-static void free_atom_callback(gpointer data)
-{
-	struct atom_callback *atom_cb = data;
-
-	if (atom_cb->destroy)
-		atom_cb->destroy(atom_cb->data);
-
-	g_free(atom_cb);
-}
-
-static void atom_cbs_destroy(gpointer key, gpointer value, gpointer user_data)
-{
-	GSList *atom_cbs = value;
-
-	g_slist_free_full(atom_cbs, free_atom_callback);
-}
-
 static void emulator_unregister(struct ofono_atom *atom)
 {
 	struct ofono_emulator *em = __ofono_atom_get_data(atom);
 	GSList *l;
 
-	DBG("%p %p", em, atom);
-
-	/* Do the clean up when this is the last remaining atom */
-	if (em->atoms != NULL && em->atoms->next != NULL)
-		return;
-
-	DBG("Last atom unregistering");
+	DBG("%p", em);
 
 	if (em->callsetup_source) {
 		g_source_remove(em->callsetup_source);
@@ -1219,10 +1181,6 @@ static void emulator_unregister(struct ofono_atom *atom)
 	g_at_server_unref(em->server);
 	em->server = NULL;
 
-	g_hash_table_foreach(em->prefixes, atom_cbs_destroy, NULL);
-	g_hash_table_destroy(em->prefixes);
-	em->prefixes = NULL;
-
 	ofono_handsfree_card_remove(em->card);
 	em->card = NULL;
 }
@@ -1230,7 +1188,6 @@ static void emulator_unregister(struct ofono_atom *atom)
 void ofono_emulator_register(struct ofono_emulator *em, int fd)
 {
 	GIOChannel *io;
-	GSList *l;
 
 	DBG("%p, %d", em, fd);
 
@@ -1283,11 +1240,7 @@ void ofono_emulator_register(struct ofono_emulator *em, int fd)
 		g_at_server_register(em->server, "+BCS", bcs_cb, em, NULL);
 	}
 
-	for (l = em->atoms; l; l = l->next) {
-		struct ofono_atom *atom = l->data;
-
-		__ofono_atom_register(atom, emulator_unregister);
-	}
+	__ofono_atom_register(em->atom, emulator_unregister);
 
 	switch (em->type) {
 	case OFONO_EMULATOR_TYPE_DUN:
@@ -1307,23 +1260,18 @@ static void emulator_remove(struct ofono_atom *atom)
 {
 	struct ofono_emulator *em = __ofono_atom_get_data(atom);
 
-	DBG("em: %p, atom: %p", em, atom);
+	DBG("atom: %p", atom);
 
-	em->atoms = g_slist_remove(em->atoms, atom);
-
-	if (em->atoms != NULL)
-		return;
-
-	DBG("Removing emulator");
 	g_free(em);
 }
 
-struct ofono_emulator *ofono_emulator_create(GList *modems,
+struct ofono_emulator *ofono_emulator_create(struct ofono_modem *modem,
 						enum ofono_emulator_type type)
 {
 	struct ofono_emulator *em;
 	enum ofono_atom_type atom_t;
-	GList *l;
+
+	DBG("modem: %p, type: %d", modem, type);
 
 	if (type == OFONO_EMULATOR_TYPE_DUN)
 		atom_t = OFONO_ATOM_TYPE_EMULATOR_DUN;
@@ -1348,39 +1296,15 @@ struct ofono_emulator *ofono_emulator_create(GList *modems,
 	em->events_mode = 3;	/* default mode is forwarding events */
 	em->cmee_mode = 0;	/* CME ERROR disabled by default */
 
-	em->prefixes = g_hash_table_new_full(g_str_hash, g_str_equal,
-								g_free, NULL);
-
-	for (l = modems; l; l = l->next) {
-		struct ofono_atom *atom;
-		struct ofono_modem *modem = l->data;
-
-		DBG("modem: %p, type: %d", modem, type);
-
-		atom = __ofono_modem_add_atom_offline(modem, atom_t,
+	em->atom = __ofono_modem_add_atom_offline(modem, atom_t,
 							emulator_remove, em);
-		em->atoms = g_slist_prepend(em->atoms, atom);
-	}
 
 	return em;
 }
 
-static void free_atom(gpointer data)
-{
-	struct ofono_atom *atom = data;
-
-	__ofono_atom_free(atom);
-}
-
 void ofono_emulator_remove(struct ofono_emulator *em)
 {
-	/*
-	 * emulator_remove removes the atom from the list and eventually removes
-	 * the emulator too, so we need to make this copy for a safe removal.
-	 */
-	GSList *atoms = g_slist_copy(em->atoms);
-
-	g_slist_free_full(atoms, free_atom);
+	__ofono_atom_free(em->atom);
 }
 
 void ofono_emulator_send_final(struct ofono_emulator *em,
@@ -1447,58 +1371,10 @@ void ofono_emulator_send_info(struct ofono_emulator *em, const char *line,
 	g_at_server_send_info(em->server, line, last);
 }
 
-static struct ofono_atom *get_preferred_atom(struct ofono_emulator *em)
-{
-	char *path;
-	GSList *l;
-	struct ofono_atom *preferred = em->atoms->data;
-
-	path = __ofono_system_settings_get_string_value(PREFERRED_VOICE_MODEM);
-	if (path == NULL)
-		goto end;
-
-	for (l = em->atoms; l; l = l->next) {
-		struct ofono_atom *atom = l->data;
-
-		if (g_strcmp0(__ofono_atom_get_path(atom), path) == 0) {
-			preferred = atom;
-			break;
-		}
-	}
-
-	g_free(path);
-
-end:
-	return preferred;
-}
-
-static struct ofono_atom *get_active_atom(struct ofono_emulator *em)
-{
-	if (em->active_atom)
-		return em->active_atom;
-
-	return get_preferred_atom(em);
-}
-
-static struct atom_callback *find_atom_callback(GSList *prefix_cbs,
-						const struct ofono_atom *atom)
-{
-	GSList *l;
-
-	for (l = prefix_cbs; l; l = prefix_cbs->next) {
-		struct atom_callback *atom_cb = l->data;
-
-		if (atom_cb->atom != atom)
-			continue;
-
-		return atom_cb;
-	}
-
-	return NULL;
-}
-
 struct handler {
-	char *prefix;
+	ofono_emulator_request_cb_t cb;
+	void *data;
+	ofono_destroy_func destroy;
 	struct ofono_emulator *em;
 };
 
@@ -1510,19 +1386,8 @@ struct ofono_emulator_request {
 static void handler_proxy(GAtServer *server, GAtServerRequestType type,
 					GAtResult *result, gpointer userdata)
 {
-	GSList *prefix_cbs;
-	struct atom_callback *atom_cb;
 	struct handler *h = userdata;
 	struct ofono_emulator_request req;
-	struct ofono_atom *atom;
-
-	atom = get_active_atom(h->em);
-	prefix_cbs = g_hash_table_lookup(h->em->prefixes, h->prefix);
-	atom_cb = find_atom_callback(prefix_cbs, atom);
-	if (atom_cb == NULL) {
-		ofono_error("%s: No atom for prefix %s", __func__, h->prefix);
-		return;
-	}
 
 	switch (type) {
 	case G_AT_SERVER_REQUEST_TYPE_COMMAND_ONLY:
@@ -1541,7 +1406,7 @@ static void handler_proxy(GAtServer *server, GAtServerRequestType type,
 	g_at_result_iter_init(&req.iter, result);
 	g_at_result_iter_next(&req.iter, "");
 
-	atom_cb->cb(h->em, &req, atom_cb->data);
+	h->cb(h->em, &req, h->data);
 }
 
 static void handler_proxy_need_slc(GAtServer *server,
@@ -1575,52 +1440,24 @@ static void handler_destroy(gpointer userdata)
 {
 	struct handler *h = userdata;
 
-	g_free(h->prefix);
+	if (h->destroy)
+		h->destroy(h->data);
+
 	g_free(h);
 }
 
-ofono_bool_t ofono_emulator_add_handler(struct ofono_atom *atom,
+ofono_bool_t ofono_emulator_add_handler(struct ofono_emulator *em,
 					const char *prefix,
 					ofono_emulator_request_cb_t cb,
 					void *data, ofono_destroy_func destroy)
 {
 	struct handler *h;
-	GSList *prefix_cbs;
-	struct atom_callback *atom_cb;
 	GAtServerNotifyFunc func = handler_proxy;
-	struct ofono_emulator *em = __ofono_atom_get_data(atom);
-	gboolean already_registered;
-
-	DBG("%p %s cb %p", atom, prefix, cb);
-
-	prefix_cbs = g_hash_table_lookup(em->prefixes, prefix);
-	already_registered = prefix_cbs ? TRUE : FALSE;
-
-	if (find_atom_callback(prefix_cbs, atom)) {
-		ofono_info("%s: Atom %p already registered for prefix %s",
-							__func__, atom, prefix);
-		return FALSE;
-	}
-
-	atom_cb = g_malloc0(sizeof(*atom_cb));
-	atom_cb->atom = atom;
-	atom_cb->cb = cb;
-	atom_cb->data = data;
-	atom_cb->destroy = destroy;
-
-	/*
-	 * Append to avoid modifying the head, which is the value in the hash
-	 * table. We refresh it for the case of the first insertion though.
-	 */
-	prefix_cbs = g_slist_append(prefix_cbs, atom_cb);
-
-	if (already_registered)
-		return TRUE;
-
-	g_hash_table_insert(em->prefixes, g_strdup(prefix), prefix_cbs);
 
 	h = g_new0(struct handler, 1);
-	h->prefix = g_strdup(prefix);
+	h->cb = cb;
+	h->data = data;
+	h->destroy = destroy;
 	h->em = em;
 
 	if (em->type == OFONO_EMULATOR_TYPE_HFP) {
@@ -1639,31 +1476,9 @@ ofono_bool_t ofono_emulator_add_handler(struct ofono_atom *atom,
 	return FALSE;
 }
 
-ofono_bool_t ofono_emulator_remove_handler(struct ofono_atom *atom,
+ofono_bool_t ofono_emulator_remove_handler(struct ofono_emulator *em,
 						const char *prefix)
 {
-	struct ofono_emulator *em = __ofono_atom_get_data(atom);
-	GSList *prefix_cbs;
-	struct atom_callback *atom_cb;
-
-	prefix_cbs = g_hash_table_lookup(em->prefixes, prefix);
-	atom_cb = find_atom_callback(prefix_cbs, atom);
-
-	if (atom_cb == NULL)
-		return FALSE;
-
-	prefix_cbs = g_slist_remove(prefix_cbs, atom_cb);
-
-	free_atom_callback(atom_cb);
-
-	if (prefix_cbs != NULL) {
-		g_hash_table_replace(em->prefixes,
-						g_strdup(prefix), prefix_cbs);
-		return TRUE;
-	}
-
-	g_hash_table_remove(em->prefixes, prefix);
-
 	return g_at_server_unregister(em->server, prefix);
 }
 
@@ -1692,34 +1507,8 @@ enum ofono_emulator_request_type ofono_emulator_request_get_type(
 	return req->type;
 }
 
-static gboolean valid_indication(struct ofono_emulator *em,
-				struct ofono_atom *atom, const char *name)
-{
-	struct ofono_atom *preferred;
-
-	if (g_strcmp0(name, OFONO_EMULATOR_IND_BATTERY) == 0)
-		return TRUE;
-
-	if (em->active_atom) {
-		if (em->active_atom == atom)
-			return TRUE;
-		else
-			return FALSE;
-	} else if (g_strcmp0(name, OFONO_EMULATOR_IND_CALL) == 0
-			|| g_strcmp0(name, OFONO_EMULATOR_IND_CALLSETUP) == 0) {
-		return TRUE;
-	}
-
-	/* Return FALSE if the modem is not the preferred one */
-	preferred = get_preferred_atom(em);
-	if (preferred == atom)
-		return TRUE;
-	else
-		return FALSE;
-}
-
-void ofono_emulator_set_indicator(struct ofono_atom *atom,
-						const char *name, int value)
+void ofono_emulator_set_indicator(struct ofono_emulator *em,
+					const char *name, int value)
 {
 	int i;
 	char buf[20];
@@ -1729,12 +1518,6 @@ void ofono_emulator_set_indicator(struct ofono_atom *atom,
 	gboolean call;
 	gboolean callsetup;
 	gboolean waiting;
-	struct ofono_emulator *em = __ofono_atom_get_data(atom);
-
-	if (!valid_indication(em, atom, name))
-		return;
-
-	DBG("%s\t%d", name, value);
 
 	ind = find_indicator(em, name, &i);
 
@@ -1749,18 +1532,6 @@ void ofono_emulator_set_indicator(struct ofono_atom *atom,
 
 	call = ind == call_ind;
 	callsetup = ind == cs_ind;
-
-	if (call || callsetup) {
-		if (call_ind->value == OFONO_EMULATOR_CALL_INACTIVE
-				&& cs_ind->value ==
-					OFONO_EMULATOR_CALLSETUP_INACTIVE) {
-			DBG("Call finished for HFP atom %p", atom);
-			em->active_atom = NULL;
-		} else if (em->active_atom == NULL) {
-			DBG("New call from HFP atom %p", atom);
-			em->active_atom = atom;
-		}
-	}
 
 	/*
 	 * When callsetup indicator goes to Incoming and there is an active
@@ -1815,16 +1586,12 @@ start_ring:
 							notify_ring, em);
 }
 
-void __ofono_emulator_set_indicator_forced(struct ofono_atom *atom,
+void __ofono_emulator_set_indicator_forced(struct ofono_emulator *em,
 						const char *name, int value)
 {
 	int i;
 	struct indicator *ind;
 	char buf[20];
-	struct ofono_emulator *em = __ofono_atom_get_data(atom);
-
-	if (!valid_indication(em, atom, name))
-		return;
 
 	ind = find_indicator(em, name, &i);
 
@@ -1917,7 +1684,6 @@ int ofono_emulator_start_codec_negotiation(struct ofono_emulator *em,
 {
 	char buf[64];
 	unsigned char codec;
-	int err;
 
 	if (em == NULL)
 		return -EINVAL;
@@ -1942,11 +1708,7 @@ int ofono_emulator_start_codec_negotiation(struct ofono_emulator *em,
 		 * already have a negotiated codec we can proceed here
 		 * without doing any negotiation again.
 		 */
-		err = ofono_handsfree_card_connect_sco(em->card);
-		if (err < 0) {
-			ofono_error("SCO connection failed");
-			return err;
-		}
+		ofono_handsfree_card_connect_sco(em->card);
 
 		return 0;
 	}

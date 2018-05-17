@@ -21,12 +21,19 @@ pkginclude_HEADERS = include/log.h include/plugin.h include/history.h \
 			include/cdma-connman.h include/gnss.h \
 			include/private-network.h include/cdma-netreg.h \
 			include/cdma-provision.h include/handsfree.h \
+			include/sim-mnclength.h \
 			include/handsfree-audio.h include/siri.h \
-			include/sim-mnclength.h include/spn-table.h \
-			include/dns-client.h include/wakelock.h \
-			include/system-settings.h
+			include/sms-filter.h include/gprs-filter.h \
+			include/netmon.h include/lte.h \
+			include/storage.h \
+			gdbus/gdbus.h
 
 nodist_pkginclude_HEADERS = include/version.h
+
+if SAILFISH_MANAGER
+nodist_pkginclude_HEADERS += include/sailfish_cell_info.h \
+			include/sailfish_manager.h include/sailfish_watch.h
+endif
 
 local_headers = $(foreach file,$(pkginclude_HEADERS) \
 				$(nodist_pkginclude_HEADERS), \
@@ -50,10 +57,6 @@ endif
 confdir = $(sysconfdir)/ofono
 
 dist_conf_DATA =
-
-rules_files = plugins/ofono.rules plugins/ofono-speedup.rules
-rulesdir = @UDEV_DATADIR@
-rules_DATA = $(foreach file,$(rules_files), plugins/97-$(notdir $(file))) 
 
 statedir = $(localstatedir)/lib/ofono
 
@@ -102,20 +105,16 @@ gisi_sources = gisi/client.c gisi/client.h gisi/common.h \
 				gisi/server.c gisi/server.h \
 				gisi/socket.c gisi/socket.h
 
-gril_sources = gril/gril.h gril/gril.c gril/grilio.h \
-				gril/grilio.c gril/grilutil.h \
-				gril/grilutil.c gril/ringbuffer.h \
-				gril/gfunc.h gril/ril.h \
+gril_sources = gril/gril.h gril/gril.c \
+				gril/grilio.h gril/grilio.c \
+				gril/grilutil.h gril/grilutil.c \
+				gril/gfunc.h gril/gril.h \
 				gril/parcel.c gril/parcel.h \
-				gril/grilreply.c gril/grilreply.h \
-				gril/grilrequest.c gril/grilrequest.h \
-				gril/grilunsol.c gril/grilunsol.h
+				gril/ril_constants.h
 
 btio_sources = btio/btio.h btio/btio.c
 
 if UDEV
-builtin_modules += udev
-builtin_sources += plugins/udev.c
 builtin_cflags += @UDEV_CFLAGS@
 builtin_libadd += @UDEV_LIBS@
 
@@ -123,57 +122,75 @@ builtin_modules += udevng
 builtin_sources += plugins/udevng.c
 endif
 
+if SAILFISH_MANAGER
+builtin_modules += sailfish_manager
+builtin_sources += plugins/sailfish_manager/sailfish_cell_info.c \
+			plugins/sailfish_manager/sailfish_cell_info_dbus.c \
+			plugins/sailfish_manager/sailfish_manager.c \
+			plugins/sailfish_manager/sailfish_manager_dbus.c \
+			plugins/sailfish_manager/sailfish_sim_info.c \
+			plugins/sailfish_manager/sailfish_sim_info_dbus.c \
+			plugins/sailfish_manager/sailfish_watch.c
+endif
+
 if RILMODEM
+if SAILFISH_RILMODEM
+
+builtin_modules += ril
+builtin_sources +=	drivers/ril/ril_call_barring.c \
+			drivers/ril/ril_call_forward.c \
+			drivers/ril/ril_call_settings.c \
+			drivers/ril/ril_call_volume.c \
+			drivers/ril/ril_cell_info.c \
+			drivers/ril/ril_config.c \
+			drivers/ril/ril_cbs.c \
+			drivers/ril/ril_data.c \
+			drivers/ril/ril_devinfo.c \
+			drivers/ril/ril_ecclist.c \
+			drivers/ril/ril_gprs.c \
+			drivers/ril/ril_gprs_context.c \
+			drivers/ril/ril_modem.c \
+			drivers/ril/ril_netmon.c \
+			drivers/ril/ril_netreg.c \
+			drivers/ril/ril_network.c \
+			drivers/ril/ril_oem_raw.c \
+			drivers/ril/ril_phonebook.c \
+			drivers/ril/ril_plugin.c \
+			drivers/ril/ril_radio.c \
+			drivers/ril/ril_radio_caps.c \
+			drivers/ril/ril_radio_settings.c \
+			drivers/ril/ril_sim.c \
+			drivers/ril/ril_sim_card.c \
+			drivers/ril/ril_sim_settings.c \
+			drivers/ril/ril_sms.c \
+			drivers/ril/ril_stk.c \
+			drivers/ril/ril_ussd.c \
+			drivers/ril/ril_util.c \
+			drivers/ril/ril_vendor.c \
+			drivers/ril/ril_voicecall.c
+
+# Vendor specific extensions
+builtin_sources +=	drivers/ril/ril_vendor_mtk.c
+
+if DATAFILES
+dist_conf_DATA += drivers/ril/ril_subscription.conf
+endif
+
+else
+
 builtin_sources += $(gril_sources)
 
 builtin_modules += rildev
 builtin_sources += plugins/rildev.c
 
 builtin_modules += ril
-builtin_sources += plugins/ril.c
-
-builtin_modules += mtk
-builtin_sources += plugins/mtk.c
-
-builtin_modules += mtk2
-builtin_sources += plugins/mtk2.c
+builtin_sources += plugins/ril.c plugins/ril.h
 
 builtin_modules += infineon
 builtin_sources += plugins/infineon.c
 
-builtin_modules += qcom_msim
-builtin_sources += plugins/qcom-msim.c
-
-builtin_modules += androidspntable
-builtin_sources += plugins/android-spn-table.c
-
-builtin_modules += android_wakelock
-builtin_sources += plugins/android-wakelock.c
-
-builtin_modules += mtkmodem
-builtin_sources += drivers/mtkmodem/mtkmodem.h \
-			drivers/mtkmodem/mtkmodem.c \
-			drivers/mtkmodem/mtkutil.h \
-			drivers/mtkmodem/mtkutil.c \
-			drivers/mtkmodem/mtkrequest.h \
-			drivers/mtkmodem/mtkrequest.c \
-			drivers/mtkmodem/mtkunsol.h \
-			drivers/mtkmodem/mtkunsol.c \
-			drivers/mtkmodem/mtkreply.h \
-			drivers/mtkmodem/mtkreply.c \
-			drivers/mtkmodem/voicecall.c \
-			drivers/mtkmodem/gprs.c \
-			drivers/mtkmodem/radio-settings.c \
-			drivers/mtkmodem/mtksettings.c
-
-builtin_modules += mtk2modem
-builtin_sources += drivers/mtk2modem/mtk2modem.h \
-			drivers/mtk2modem/mtk2modem.c \
-			drivers/mtk2modem/mtk2_constants.h \
-			drivers/mtk2modem/mtk2util.h \
-			drivers/mtk2modem/mtk2util.c \
-			drivers/mtk2modem/voicecall.c \
-			drivers/mtk2modem/gprs.c
+builtin_modules += ril_intel
+builtin_sources += plugins/ril_intel.c
 
 builtin_modules += rilmodem
 builtin_sources += drivers/rilmodem/rilmodem.h \
@@ -182,6 +199,7 @@ builtin_sources += drivers/rilmodem/rilmodem.h \
 			drivers/rilmodem/devinfo.c \
 			drivers/rilmodem/network-registration.c \
 			drivers/rilmodem/voicecall.c \
+			drivers/rilmodem/voicecall.h \
 			drivers/rilmodem/call-volume.c \
 			drivers/rilmodem/gprs.c \
 			drivers/rilmodem/gprs-context.c \
@@ -194,12 +212,12 @@ builtin_sources += drivers/rilmodem/rilmodem.h \
 			drivers/rilmodem/call-forwarding.c \
 			drivers/rilmodem/radio-settings.c \
 			drivers/rilmodem/call-barring.c \
-			drivers/rilmodem/phonebook.c
-
-builtin_modules += qcommsimmodem
-builtin_sources += drivers/qcommsimmodem/qcom_msim_modem.c \
-			drivers/qcommsimmodem/radio-settings.c \
-			drivers/qcommsimmodem/gprs.c
+			drivers/rilmodem/netmon.c \
+			drivers/rilmodem/stk.c \
+			drivers/rilmodem/cbs.c \
+			drivers/infineonmodem/infineon_constants.h \
+			drivers/rilmodem/lte.c
+endif
 endif
 
 if ISIMODEM
@@ -257,11 +275,13 @@ qmi_sources = drivers/qmimodem/qmi.h drivers/qmimodem/qmi.c \
 					drivers/qmimodem/ctl.h \
 					drivers/qmimodem/dms.h \
 					drivers/qmimodem/nas.h \
+					drivers/qmimodem/nas.c \
 					drivers/qmimodem/uim.h \
 					drivers/qmimodem/wms.h \
 					drivers/qmimodem/wds.h \
 					drivers/qmimodem/pds.h \
-					drivers/qmimodem/common.h
+					drivers/qmimodem/common.h \
+					drivers/qmimodem/wda.h
 
 builtin_modules += qmimodem
 builtin_sources += $(qmi_sources) \
@@ -278,7 +298,8 @@ builtin_sources += $(qmi_sources) \
 			drivers/qmimodem/gprs.c \
 			drivers/qmimodem/gprs-context.c \
 			drivers/qmimodem/radio-settings.c \
-			drivers/qmimodem/location-reporting.c
+			drivers/qmimodem/location-reporting.c \
+			drivers/qmimodem/netmon.c
 
 builtin_modules += gobi
 builtin_sources += plugins/gobi.c
@@ -286,8 +307,7 @@ endif
 
 if ATMODEM
 builtin_modules += atmodem
-builtin_sources += $(gatchat_sources) \
-			drivers/atmodem/atmodem.h \
+builtin_sources += 	drivers/atmodem/atmodem.h \
 			drivers/atmodem/atmodem.c \
 			drivers/atmodem/call-settings.c \
 			drivers/atmodem/sms.c \
@@ -310,7 +330,8 @@ builtin_sources += $(gatchat_sources) \
 			drivers/atmodem/gprs.c \
 			drivers/atmodem/gprs-context.c \
 			drivers/atmodem/sim-auth.c \
-			drivers/atmodem/gnss.c
+			drivers/atmodem/gnss.c \
+			drivers/atmodem/lte.c
 
 builtin_modules += nwmodem
 builtin_sources += drivers/atmodem/atutil.h \
@@ -367,7 +388,8 @@ builtin_modules += telitmodem
 builtin_sources += drivers/atmodem/atutil.h \
 			drivers/telitmodem/telitmodem.h \
 			drivers/telitmodem/telitmodem.c \
-			drivers/telitmodem/location-reporting.c
+			drivers/telitmodem/location-reporting.c \
+			drivers/telitmodem/gprs-context-ncm.c
 
 builtin_modules += hsomodem
 builtin_sources += drivers/atmodem/atutil.h \
@@ -425,6 +447,27 @@ builtin_sources += drivers/atmodem/atutil.h \
 			drivers/speedupmodem/speedupmodem.c \
 			drivers/speedupmodem/ussd.c
 
+builtin_modules += ubloxmodem
+builtin_sources += drivers/atmodem/atutil.h \
+			drivers/ubloxmodem/ubloxmodem.h \
+			drivers/ubloxmodem/ubloxmodem.c \
+			drivers/ubloxmodem/gprs-context.c \
+			drivers/ubloxmodem/netmon.c \
+			drivers/ubloxmodem/lte.c
+
+
+builtin_modules += gemaltomodem
+builtin_sources += drivers/atmodem/atutil.h \
+			drivers/gemaltomodem/gemaltomodem.h \
+			drivers/gemaltomodem/gemaltomodem.c \
+			drivers/gemaltomodem/location-reporting.c
+
+builtin_modules += xmm7modem
+builtin_sources += drivers/atmodem/atutil.h \
+			drivers/xmm7modem/xmm7modem.h \
+			drivers/xmm7modem/xmm7modem.c \
+			drivers/xmm7modem/radio-settings.c
+
 if PHONESIM
 builtin_modules += phonesim
 builtin_sources += plugins/phonesim.c
@@ -443,6 +486,7 @@ builtin_sources += drivers/cdmamodem/cdmamodem.h \
 			drivers/cdmamodem/connman.c
 endif
 
+if !RILMODEM
 builtin_modules += g1
 builtin_sources += plugins/g1.c
 
@@ -488,6 +532,9 @@ builtin_sources += plugins/caif.c
 builtin_modules += cinterion
 builtin_sources += plugins/cinterion.c
 
+builtin_modules += gemalto
+builtin_sources += plugins/gemalto.c
+
 builtin_modules += nokia
 builtin_sources += plugins/nokia.c
 
@@ -518,8 +565,8 @@ builtin_sources += plugins/sim900.c
 builtin_modules += connman
 builtin_sources += plugins/connman.c
 
-builtin_modules += he910
-builtin_sources += plugins/he910.c
+builtin_modules += telit
+builtin_sources += plugins/telit.c
 
 builtin_modules += quectel
 builtin_sources += plugins/quectel.c
@@ -527,25 +574,43 @@ builtin_sources += plugins/quectel.c
 builtin_modules += ublox
 builtin_sources += plugins/ublox.c
 
+builtin_modules += xmm7xxx
+builtin_sources += plugins/xmm7xxx.c
+endif
+
+builtin_modules += connman
+builtin_sources += plugins/connman.c
+
+builtin_modules += mnclength
+builtin_sources += plugins/mnclength.c
+
 if BLUETOOTH
 if BLUEZ4
-builtin_modules += bluez4
-builtin_sources += plugins/bluez4.c plugins/bluez4.h
-
-builtin_modules += telit
-builtin_sources += plugins/telit.c plugins/bluez4.h
-
 builtin_modules += sap
 builtin_sources += plugins/sap.c plugins/bluez4.h
 
 builtin_modules += hfp_bluez4
 builtin_sources += plugins/hfp_hf_bluez4.c plugins/bluez4.h
 
-builtin_modules += hfp_ag_bluez4
-builtin_sources += plugins/hfp_ag_bluez4.c plugins/bluez4.h
-
 builtin_modules += dun_gw_bluez4
 builtin_sources += plugins/dun_gw_bluez4.c plugins/bluez4.h
+else
+builtin_modules += hfp_bluez5
+builtin_sources += plugins/hfp_hf_bluez5.c plugins/bluez5.h
+
+builtin_modules += dun_gw_bluez5
+builtin_sources += plugins/dun_gw_bluez5.c plugins/bluez5.h
+endif
+endif
+endif
+
+if BLUETOOTH
+if BLUEZ4
+builtin_modules += bluez4
+builtin_sources += plugins/bluez4.c plugins/bluez4.h
+
+builtin_modules += hfp_ag_bluez4
+builtin_sources += plugins/hfp_ag_bluez4.c plugins/bluez4.h
 
 builtin_sources += $(btio_sources)
 builtin_cflags += @BLUEZ_CFLAGS@
@@ -554,20 +619,18 @@ else
 builtin_modules += bluez5
 builtin_sources += plugins/bluez5.c plugins/bluez5.h
 
-builtin_modules += hfp_bluez5
-builtin_sources += plugins/hfp_hf_bluez5.c plugins/bluez5.h
-
 builtin_modules += hfp_ag_bluez5
 builtin_sources += plugins/hfp_ag_bluez5.c plugins/bluez5.h
 
-builtin_modules += dun_gw_bluez5
-builtin_sources += plugins/dun_gw_bluez5.c plugins/bluez5.h
+if SAILFISH_BT
+builtin_modules += sfos_bt
+builtin_sources += plugins/sailfish_bt.c
+endif
+endif
 
 if UPOWER
 builtin_modules += upower
 builtin_sources += plugins/upower.c
-endif
-endif
 endif
 endif
 
@@ -576,29 +639,32 @@ builtin_modules += nettime
 builtin_sources += plugins/nettime.c
 endif
 
+if SAILFISH_DEBUGLOG
+builtin_modules += debuglog
+builtin_sources += plugins/sailfish_debuglog.c
+endif
+
+if SAILFISH_PROVISION
+builtin_sources += plugins/sailfish_provision.c
+PROVISION = 1
+else
+if PROVISION
+builtin_sources += plugins/provision.c
+endif
+endif
+
 if PROVISION
 builtin_sources += plugins/mbpi.h plugins/mbpi.c
-builtin_sources += plugins/ubuntu-apndb.h plugins/ubuntu-apndb.c
 
 builtin_modules += provision
-builtin_sources += plugins/provision.c
-
-builtin_modules += ubuntu_provision
-builtin_sources += plugins/ubuntu-provision.c
+builtin_sources += plugins/provision.h
 
 builtin_modules += cdma_provision
 builtin_sources += plugins/cdma-provision.c
 
-builtin_modules += mnclength
-builtin_sources += plugins/mnclength.c
-endif
+builtin_modules += file_provision
+builtin_sources += plugins/file-provision.c
 
-if CARES
-builtin_modules += c_ares_dns_client
-builtin_sources += plugins/c-ares-dns-client.c
-
-builtin_cflags += @CARES_CFLAGS@
-builtin_libadd += @CARES_LIBS@
 endif
 
 if MAINTAINER_MODE
@@ -630,20 +696,21 @@ builtin_sources += plugins/smart-messaging.c
 builtin_modules += push_notification
 builtin_sources += plugins/push-notification.c
 
-builtin_modules += smshistory
+if SAILFISH_PUSHFORWARDER
+builtin_modules += pushforwarder
+builtin_sources += plugins/sailfish_pushforwarder.c
+endif
+
+builtin_modules += sms_history
 builtin_sources += plugins/smshistory.c
 
-if ACCOUNTSSETTINGS
-builtin_modules += accounts_settings
-builtin_sources += plugins/accounts-settings.c
-
-builtin_cflags += @SYSTEMD_CFLAGS@
-builtin_libadd += @SYSTEMD_LIBS@
-endif
+builtin_modules += allowed_apns
+builtin_sources += plugins/allowed-apns.c
 
 sbin_PROGRAMS = src/ofonod
 
-src_ofonod_SOURCES = $(builtin_sources) src/ofono.ver \
+src_ofonod_SOURCES = $(builtin_sources) $(gatchat_sources) src/ofono.ver \
+			src/mtu-watch.c \
 			src/main.c src/ofono.h src/log.c src/plugin.c \
 			src/modem.c src/common.h src/common.c \
 			src/manager.c src/dbus.c src/util.h src/util.c \
@@ -668,10 +735,11 @@ src_ofonod_SOURCES = $(builtin_sources) src/ofono.ver \
 			src/cdma-sms.c src/private-network.c src/cdma-netreg.c \
 			src/cdma-provision.c src/handsfree.c \
 			src/handsfree-audio.c src/bluetooth.h \
+			src/sim-mnclength.c src/voicecallagent.c \
+			src/sms-filter.c src/gprs-filter.c src/dbus-queue.c \
 			src/hfp.h src/siri.c \
-			src/sim-mnclength.c src/spn-table.c \
-			src/dns-client.c src/wakelock.c \
-			src/system-settings.c
+			src/netmon.c src/lte.c \
+			src/netmonagent.c src/netmonagent.h
 
 src_ofonod_LDADD = gdbus/libgdbus-internal.la $(builtin_libadd) \
 			@GLIB_LIBS@ @DBUS_LIBS@ -ldl
@@ -681,7 +749,8 @@ src_ofonod_LDFLAGS = -Wl,--export-dynamic \
 
 BUILT_SOURCES = $(local_headers) src/builtin.h
 
-CLEANFILES = $(BUILT_SOURCES) $(rules_DATA)
+CLEANFILES = $(BUILT_SOURCES) $(rules_DATA) \
+	$(shell find . -name "*.gcda") $(shell find . -name "*.gcno")
 
 plugindir = $(pkglibdir)/plugins
 
@@ -715,8 +784,13 @@ doc_files = doc/overview.txt doc/ofono-paper.txt doc/release-faq.txt \
 			doc/audio-settings-api.txt doc/text-telephony-api.txt \
 			doc/calypso-modem.txt doc/message-api.txt \
 			doc/location-reporting-api.txt \
+			doc/smshistory-api.txt doc/oemraw-api.txt \
 			doc/certification.txt doc/siri-api.txt \
-			doc/telit-modem.txt
+			doc/telit-modem.txt \
+			doc/networkmonitor-api.txt \
+			doc/allowed-apns-api.txt \
+			doc/lte-api.txt \
+			doc/cinterion-hardware-monitor-api.txt
 
 
 test_scripts = test/backtrace \
@@ -728,6 +802,7 @@ test_scripts = test/backtrace \
 		test/dial-number \
 		test/list-calls \
 		test/answer-calls \
+		test/auto-answer-calls \
 		test/reject-calls \
 		test/create-multiparty \
 		test/private-chat \
@@ -749,6 +824,7 @@ test_scripts = test/backtrace \
 		test/receive-sms \
 		test/remove-contexts \
 		test/send-sms \
+		test/cancel-sms \
 		test/set-mic-volume \
 		test/set-speaker-volume \
 		test/test-stk-menu \
@@ -803,6 +879,7 @@ test_scripts = test/backtrace \
 		test/set-context-property \
 		test/test-gnss \
 		test/swap-calls \
+		test/transfer-call \
 		test/release-and-answer \
 		test/release-and-swap \
 		test/hold-and-answer \
@@ -810,59 +887,158 @@ test_scripts = test/backtrace \
 		test/hangup-call \
 		test/display-icon \
 		test/set-msisdn \
-		test/rilmodem/test-hangup \
-		test/rilmodem/test-modem-offline \
-		test/rilmodem/test-sim-online \
-		test/set-ddr
+		test/test-voicecallagent \
+		test/get-network-time \
+		test/set-ddr \
+		test/register-auto \
+		test/register-operator \
+		test/set-sms-smsc \
+		test/set-sms-bearer \
+		test/get-serving-cell-info \
+		test/list-allowed-access-points \
+		test/enable-throttling \
+		test/disable-throttling \
+		test/set-lte-property \
+		test/test-serving-cell-info
+
 
 if TEST
 testdir = $(pkglibdir)/test
 test_SCRIPTS = $(test_scripts)
 endif
 
-EXTRA_DIST = src/genbuiltin $(rules_files) $(doc_files) $(test_scripts)
+EXTRA_DIST = src/genbuiltin plugins/ofono.rules plugins/ofono-speedup.rules \
+				$(doc_files) $(test_scripts)
 
 dist_man_MANS = doc/ofonod.8
 
+if TEST_COVERAGE
+COVERAGE_OPT = --coverage
+endif
 
 unit_objects =
 
 unit_tests = unit/test-common unit/test-util unit/test-idmap \
 				unit/test-simutil unit/test-stkutil \
-				unit/test-sms unit/test-cdmasms \
-				unit/test-grilrequest \
-				unit/test-grilreply \
-				unit/test-grilunsol \
-				unit/test-mnclength \
-				unit/test-mtkrequest \
-				unit/test-mtkreply \
-				unit/test-mtkunsol \
+				unit/test-sms unit/test-cdmasms
+
+if SAILFISH_MANAGER
+
+unit_test_sailfish_cell_info_SOURCES = unit/test-sailfish_cell_info.c \
+			plugins/sailfish_manager/sailfish_cell_info.c
+unit_test_sailfish_cell_info_CFLAGS = $(AM_CFLAGS) $(COVERAGE_OPT) \
+			-Iplugins/sailfish_manager
+unit_test_sailfish_cell_info_LDADD = @GLIB_LIBS@ -ldl
+unit_objects += $(unit_test_sailfish_cell_info_OBJECTS)
+unit_tests += unit/test-sailfish_cell_info
+
+unit_test_sailfish_cell_info_dbus_SOURCES = unit/test-dbus.c \
+			unit/test-sailfish_cell_info_dbus.c \
+			unit/fake_sailfish_cell_info.c \
+			plugins/sailfish_manager/sailfish_cell_info.c \
+			plugins/sailfish_manager/sailfish_cell_info_dbus.c \
+			gdbus/object.c \
+			src/dbus.c src/log.c
+unit_test_sailfish_cell_info_dbus_CFLAGS = $(AM_CFLAGS) $(COVERAGE_OPT) \
+			@DBUS_GLIB_CFLAGS@ -Iplugins/sailfish_manager
+unit_test_sailfish_cell_info_dbus_LDADD = @DBUS_GLIB_LIBS@ @GLIB_LIBS@ -ldl
+unit_objects += $(unit_test_sailfish_cell_info_dbus_OBJECTS)
+unit_tests += unit/test-sailfish_cell_info_dbus
+
+unit_test_sailfish_sim_info_SOURCES = unit/test-sailfish_sim_info.c \
+			unit/fake_sailfish_watch.c \
+			plugins/sailfish_manager/sailfish_sim_info.c \
+			src/storage.c src/watch.c src/log.c
+unit_test_sailfish_sim_info_CFLAGS = $(COVERAGE_OPT) $(AM_CFLAGS) \
+			-DSTORAGEDIR='"/tmp/ofono"' -Iplugins/sailfish_manager
+unit_test_sailfish_sim_info_LDADD = @GLIB_LIBS@ -ldl
+unit_objects += $(unit_test_sailfish_sim_info_OBJECTS)
+unit_tests += unit/test-sailfish_sim_info
+
+unit_test_sailfish_sim_info_dbus_SOURCES = unit/test-sailfish_sim_info_dbus.c \
+			unit/test-dbus.c unit/fake_sailfish_watch.c \
+			plugins/sailfish_manager/sailfish_sim_info.c \
+			plugins/sailfish_manager/sailfish_sim_info_dbus.c \
+			gdbus/object.c \
+			src/dbus.c src/storage.c src/watch.c src/log.c
+unit_test_sailfish_sim_info_dbus_CFLAGS = $(COVERAGE_OPT) $(AM_CFLAGS) \
+			@DBUS_GLIB_CFLAGS@ -DSTORAGEDIR='"/tmp/ofono"' \
+			-Iplugins/sailfish_manager
+unit_test_sailfish_sim_info_dbus_LDADD = @DBUS_GLIB_LIBS@ @GLIB_LIBS@ -ldl
+unit_objects += $(unit_test_sailfish_sim_info_dbus_OBJECTS)
+unit_tests += unit/test-sailfish_sim_info_dbus
+
+unit_test_sailfish_manager_SOURCES = unit/test-sailfish_manager.c \
+			unit/fake_sailfish_watch.c \
+			plugins/sailfish_manager/sailfish_manager.c \
+			plugins/sailfish_manager/sailfish_cell_info.c \
+			plugins/sailfish_manager/sailfish_sim_info.c \
+			src/storage.c src/log.c
+unit_test_sailfish_manager_CFLAGS = $(AM_CFLAGS) $(COVERAGE_OPT) \
+			-DSTORAGEDIR='"/tmp/ofono"' -Iplugins/sailfish_manager
+unit_test_sailfish_manager_LDADD = @GLIB_LIBS@ -ldl
+unit_objects += $(unit_test_sailfish_manager_OBJECTS)
+unit_tests += unit/test-sailfish_manager
+
+unit_test_sailfish_watch_SOURCES = unit/test-sailfish_watch.c \
+			plugins/sailfish_manager/sailfish_watch.c \
+			src/log.c src/watch.c
+unit_test_sailfish_watch_CFLAGS = $(AM_CFLAGS) $(COVERAGE_OPT) \
+			-DSTORAGEDIR='"/tmp/ofono"' -Iplugins/sailfish_manager
+unit_test_sailfish_watch_LDADD = @GLIB_LIBS@ -ldl
+unit_objects += $(unit_test_sailfish_watch_OBJECTS)
+unit_tests += unit/test-sailfish_watch
+
+endif
+
+if RILMODEM
+if SAILFISH_RILMODEM
+
+unit_test_ril_config_SOURCES = unit/test-ril_config.c drivers/ril/ril_util.c \
+				drivers/ril/ril_config.c src/log.c
+unit_test_ril_config_CFLAGS = $(COVERAGE_OPT) $(AM_CFLAGS)
+unit_test_ril_config_LDADD = @GLIB_LIBS@ -ldl
+unit_objects += $(unit_test_ril_config_OBJECTS)
+unit_tests += unit/test-ril_config
+
+unit_test_ril_util_SOURCES = unit/test-ril_util.c drivers/ril/ril_util.c \
+				src/log.c
+unit_test_ril_util_CFLAGS = $(COVERAGE_OPT) $(AM_CFLAGS)
+unit_test_ril_util_LDADD = @GLIB_LIBS@ -ldl
+unit_objects += $(unit_test_ril_util_OBJECTS)
+unit_tests += unit/test-ril_util
+
+else
+unit_tests += unit/test-rilmodem-cs \
 				unit/test-rilmodem-cs \
 				unit/test-rilmodem-sms \
 				unit/test-rilmodem-cb \
-				unit/test-rilmodem-cf \
-				unit/test-rilmodem-cv \
-				unit/test-rilmodem-devinfo \
-				unit/test-rilmodem-gprs \
-				unit/test-rilmodem-gprs-context
+				unit/test-rilmodem-gprs
+
+endif
+endif
 
 noinst_PROGRAMS = $(unit_tests) \
 			unit/test-sms-root unit/test-mux unit/test-caif
 
 unit_test_common_SOURCES = unit/test-common.c src/common.c src/util.c
+unit_test_common_CFLAGS = $(COVERAGE_OPT) $(AM_CFLAGS)
 unit_test_common_LDADD = @GLIB_LIBS@
 unit_objects += $(unit_test_common_OBJECTS)
 
 unit_test_util_SOURCES = unit/test-util.c src/util.c
+unit_test_util_CFLAGS = $(COVERAGE_OPT) $(AM_CFLAGS)
 unit_test_util_LDADD = @GLIB_LIBS@
 unit_objects += $(unit_test_utils_OBJECTS)
 
 unit_test_idmap_SOURCES = unit/test-idmap.c src/idmap.c
+unit_test_idmap_CFLAGS = $(COVERAGE_OPT) $(AM_CFLAGS)
 unit_test_idmap_LDADD = @GLIB_LIBS@
 unit_objects += $(unit_test_idmap_OBJECTS)
 
 unit_test_simutil_SOURCES = unit/test-simutil.c src/util.c \
                                 src/simutil.c src/smsutil.c src/storage.c
+unit_test_simutil_CFLAGS = $(COVERAGE_OPT) $(AM_CFLAGS)
 unit_test_simutil_LDADD = @GLIB_LIBS@
 unit_objects += $(unit_test_simutil_OBJECTS)
 
@@ -870,19 +1046,23 @@ unit_test_stkutil_SOURCES = unit/test-stkutil.c unit/stk-test-data.h \
 				src/util.c \
                                 src/storage.c src/smsutil.c \
                                 src/simutil.c src/stkutil.c
+unit_test_stkutil_CFLAGS = $(COVERAGE_OPT) $(AM_CFLAGS)
 unit_test_stkutil_LDADD = @GLIB_LIBS@
 unit_objects += $(unit_test_stkutil_OBJECTS)
 
 unit_test_sms_SOURCES = unit/test-sms.c src/util.c src/smsutil.c src/storage.c
+unit_test_sms_CFLAGS = $(COVERAGE_OPT) $(AM_CFLAGS)
 unit_test_sms_LDADD = @GLIB_LIBS@
 unit_objects += $(unit_test_sms_OBJECTS)
 
 unit_test_cdmasms_SOURCES = unit/test-cdmasms.c src/cdma-smsutil.c
+unit_test_cdmasms_CFLAGS = $(COVERAGE_OPT) $(AM_CFLAGS)
 unit_test_cdmasms_LDADD = @GLIB_LIBS@
 unit_objects += $(unit_test_cdmasms_OBJECTS)
 
 unit_test_sms_root_SOURCES = unit/test-sms-root.c \
 					src/util.c src/smsutil.c src/storage.c
+unit_test_sms_root_CFLAGS = -DSTORAGEDIR='"/tmp/ofono"' $(COVERAGE_OPT) $(AM_CFLAGS)
 unit_test_sms_root_LDADD = @GLIB_LIBS@
 unit_objects += $(unit_test_sms_root_OBJECTS)
 
@@ -893,57 +1073,47 @@ unit_objects += $(unit_test_mux_OBJECTS)
 unit_test_caif_SOURCES = unit/test-caif.c $(gatchat_sources) \
 					drivers/stemodem/caif_socket.h \
 					drivers/stemodem/if_caif.h
+unit_test_caif_CFLAGS = $(COVERAGE_OPT) $(AM_CFLAGS)
 unit_test_caif_LDADD = @GLIB_LIBS@
 unit_objects += $(unit_test_caif_OBJECTS)
 
-unit_test_grilrequest_SOURCES = unit/test-grilrequest.c $(gril_sources) \
-				src/log.c src/util.c src/simutil.c \
-				src/common.c gatchat/ringbuffer.c
-unit_test_grilrequest_LDADD = @GLIB_LIBS@ -ldl
-unit_objects += $(unit_test_grilrequest_OBJECTS)
+unit_test_dbus_queue_SOURCES = unit/test-dbus-queue.c unit/test-dbus.c \
+				src/dbus-queue.c gdbus/object.c \
+				src/dbus.c src/log.c
+unit_test_dbus_queue_CFLAGS =  @DBUS_GLIB_CFLAGS@ $(COVERAGE_OPT) $(AM_CFLAGS)
+unit_test_dbus_queue_LDADD = @DBUS_GLIB_LIBS@ @GLIB_LIBS@ -ldl
+unit_objects += $(unit_test_dbus_queue_OBJECTS)
+unit_tests += unit/test-dbus-queue
 
-unit_test_grilreply_SOURCES = unit/test-grilreply.c $(gril_sources) \
-				src/log.c src/util.c src/simutil.c \
-				src/common.c gatchat/ringbuffer.c
-unit_test_grilreply_LDADD = @GLIB_LIBS@ -ldl
-unit_objects += $(unit_test_grilreply_OBJECTS)
+unit_test_provision_SOURCES = unit/test-provision.c \
+				plugins/provision.h plugins/mbpi.c \
+				plugins/sailfish_provision.c \
+				src/gprs-provision.c src/log.c
+unit_test_provision_CFLAGS = $(COVERAGE_OPT) $(AM_CFLAGS)
+unit_test_provision_LDADD = @GLIB_LIBS@ -ldl
+unit_objects += $(unit_test_provision_OBJECTS)
+unit_tests += unit/test-provision
 
-unit_test_grilunsol_SOURCES = unit/test-grilunsol.c $(gril_sources) \
-				src/log.c src/util.c src/simutil.c \
-				src/common.c gatchat/ringbuffer.c
-unit_test_grilunsol_LDADD = @GLIB_LIBS@ -ldl
-unit_objects += $(unit_test_grilunsol_OBJECTS)
+unit_test_sms_filter_SOURCES = unit/test-sms-filter.c \
+				src/sms-filter.c src/log.c
+unit_test_sms_filter_CFLAGS = $(COVERAGE_OPT) $(AM_CFLAGS)
+unit_test_sms_filter_LDADD = @GLIB_LIBS@ -ldl
+unit_objects += $(unit_test_sms_filter_OBJECTS)
+unit_tests += unit/test-sms-filter
 
-unit_test_mtkrequest_SOURCES = unit/test-mtkrequest.c $(gril_sources) \
-				drivers/mtkmodem/mtkrequest.c \
-				src/log.c src/util.c src/simutil.c \
-				src/common.c gatchat/ringbuffer.c
-unit_test_mtkrequest_LDADD = @GLIB_LIBS@ -ldl
-unit_objects += $(unit_test_mtkrequest_OBJECTS)
-
-unit_test_mtkreply_SOURCES = unit/test-mtkreply.c $(gril_sources) \
-				drivers/mtkmodem/mtkreply.c \
-				src/log.c src/util.c src/simutil.c \
-				src/common.c gatchat/ringbuffer.c
-unit_test_mtkreply_LDADD = @GLIB_LIBS@ -ldl
-unit_objects += $(unit_test_mtkreply_OBJECTS)
-
-unit_test_mtkunsol_SOURCES = unit/test-mtkunsol.c $(gril_sources) \
-				drivers/mtkmodem/mtkunsol.c \
-				src/log.c src/util.c src/simutil.c \
-				src/common.c gatchat/ringbuffer.c
-unit_test_mtkunsol_LDADD = @GLIB_LIBS@ -ldl
-unit_objects += $(unit_test_mtkunsol_OBJECTS)
-
-unit_test_mnclength_SOURCES = unit/test-mnclength.c plugins/mnclength.c \
-				src/log.c src/sim-mnclength.c
-unit_test_mnclength_LDADD = @GLIB_LIBS@ -ldl
-unit_objects += $(unit_test_mnclength_OBJECTS)
+unit_test_gprs_filter_SOURCES = unit/test-gprs-filter.c \
+				src/gprs-filter.c src/log.c
+unit_test_gprs_filter_CFLAGS = $(COVERAGE_OPT) $(AM_CFLAGS)
+unit_test_gprs_filter_LDADD = @GLIB_LIBS@ -ldl
+unit_objects += $(unit_test_gprs_filter_OBJECTS)
+unit_tests += unit/test-gprs-filter
 
 test_rilmodem_sources = $(gril_sources) src/log.c src/common.c src/util.c \
 				gatchat/ringbuffer.h gatchat/ringbuffer.c \
 				unit/rilmodem-test-server.h \
 				unit/rilmodem-test-server.c \
+				unit/rilmodem-test-engine.h \
+				unit/rilmodem-test-engine.c \
 				src/simutil.c \
 				drivers/rilmodem/rilutil.c
 
@@ -968,43 +1138,12 @@ unit_test_rilmodem_cb_LDADD = gdbus/libgdbus-internal.la $(builtin_libadd) \
 					@GLIB_LIBS@ @DBUS_LIBS@ -ldl
 unit_objects += $(unit_test_rilmodem_cb_OBJECTS)
 
-unit_test_rilmodem_cf_SOURCES = $(test_rilmodem_sources) \
-					unit/test-rilmodem-cf.c \
-					drivers/rilmodem/call-forwarding.c
-unit_test_rilmodem_cf_LDADD = gdbus/libgdbus-internal.la $(builtin_libadd) \
-					@GLIB_LIBS@ @DBUS_LIBS@ -ldl
-unit_objects += $(unit_test_rilmodem_cf_OBJECTS)
-
-unit_test_rilmodem_cv_SOURCES = $(test_rilmodem_sources) \
-					unit/test-rilmodem-cv.c \
-					unit/rilmodem-test-engine.c \
-					drivers/rilmodem/call-volume.c
-unit_test_rilmodem_cv_LDADD = gdbus/libgdbus-internal.la $(builtin_libadd) \
-					@GLIB_LIBS@ @DBUS_LIBS@ -ldl
-unit_objects += $(unit_test_rilmodem_cv_OBJECTS)
-
-unit_test_rilmodem_devinfo_SOURCES = $(test_rilmodem_sources) \
-					unit/test-rilmodem-devinfo.c \
-					drivers/rilmodem/devinfo.c
-unit_test_rilmodem_devinfo_LDADD = gdbus/libgdbus-internal.la $(builtin_libadd) \
-					@GLIB_LIBS@ @DBUS_LIBS@ -ldl
-unit_objects += $(unit_test_rilmodem_devinfo_OBJECTS)
-
 unit_test_rilmodem_gprs_SOURCES = $(test_rilmodem_sources) \
 					unit/test-rilmodem-gprs.c \
-					unit/rilmodem-test-engine.c \
 					drivers/rilmodem/gprs.c
 unit_test_rilmodem_gprs_LDADD = gdbus/libgdbus-internal.la $(builtin_libadd) \
 					@GLIB_LIBS@ @DBUS_LIBS@ -ldl
 unit_objects += $(unit_test_rilmodem_gprs_OBJECTS)
-
-unit_test_rilmodem_gprs_context_SOURCES = $(test_rilmodem_sources) \
-					unit/test-rilmodem-gprs-context.c \
-					unit/rilmodem-test-engine.c \
-					drivers/rilmodem/gprs-context.c
-unit_test_rilmodem_gprs_context_LDADD = gdbus/libgdbus-internal.la $(builtin_libadd) \
-					@GLIB_LIBS@ @DBUS_LIBS@ -ldl
-unit_objects += $(unit_test_rilmodem_gprs_context_OBJECTS)
 
 TESTS = $(unit_tests)
 
@@ -1031,13 +1170,6 @@ tools_lookup_provider_name_LDADD = @GLIB_LIBS@
 
 tools_tty_redirector_SOURCES = tools/tty-redirector.c
 tools_tty_redirector_LDADD = @GLIB_LIBS@
-
-if QMIMODEM
-noinst_PROGRAMS += tools/qmi
-
-tools_qmi_SOURCES = $(qmi_sources) tools/qmi.c
-tools_qmi_LDADD = @GLIB_LIBS@
-endif
 
 if MAINTAINER_MODE
 noinst_PROGRAMS += tools/stktest
@@ -1106,6 +1238,10 @@ plugins/%.rules:
 include/ofono/version.h: include/version.h
 	$(AM_V_at)$(MKDIR_P) include/ofono
 	$(AM_V_GEN)$(LN_S) $(abs_top_builddir)/$< $@
+
+include/ofono/gdbus.h: $(abs_top_srcdir)/gdbus/gdbus.h
+	$(AM_V_at)$(MKDIR_P) include/ofono
+	$(AM_V_GEN)$(LN_S) $< $@
 
 include/ofono/%.h: $(abs_top_srcdir)/include/%.h
 	$(AM_V_at)$(MKDIR_P) include/ofono

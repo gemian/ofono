@@ -3,6 +3,7 @@
  *  oFono - Open Source Telephony
  *
  *  Copyright (C) 2008-2011  Intel Corporation. All rights reserved.
+ *  Copyright (C) 2015-2017  Jolla Ltd.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2 as
@@ -38,11 +39,31 @@
 #include <ofono/gprs-provision.h>
 
 #ifndef MBPI_DATABASE
-#define MBPI_DATABASE  "/usr/share/mobile-broadband-provider-info/" \
+#  ifdef PROVIDER_DATABASE
+     /* This one is pulled from mobile-broadband-provider-info.pc
+      * by the configure script, we should trust it. */
+#    define MBPI_DATABASE PROVIDER_DATABASE
+#  else
+     /* The default one */
+#    define MBPI_DATABASE "/usr/share/mobile-broadband-provider-info/" \
 							"serviceproviders.xml"
+#  endif
 #endif
 
 #include "mbpi.h"
+
+const char *mbpi_database = MBPI_DATABASE;
+
+/*
+ * Use IPv4 for MMS contexts because gprs.c assumes that MMS proxy
+ * address is IPv4.
+ */
+enum ofono_gprs_proto mbpi_default_internet_proto = OFONO_GPRS_PROTO_IPV4V6;
+enum ofono_gprs_proto mbpi_default_mms_proto = OFONO_GPRS_PROTO_IP;
+enum ofono_gprs_proto mbpi_default_proto = OFONO_GPRS_PROTO_IP;
+enum ofono_gprs_auth_method mbpi_default_auth_method = OFONO_GPRS_AUTH_METHOD_ANY;
+
+#define OFONO_GPRS_AUTH_METHOD_UNSPECIFIED ((enum ofono_gprs_auth_method)(-1))
 
 #define _(x) case x: return (#x)
 
@@ -53,7 +74,8 @@ enum MBPI_ERROR {
 struct gsm_data {
 	const char *match_mcc;
 	const char *match_mnc;
-	enum ofono_gprs_context_type match_type;
+	char *provider_name;
+	gboolean provider_primary;
 	GSList *apns;
 	gboolean match_found;
 	gboolean allow_duplicates;
@@ -73,7 +95,6 @@ const char *mbpi_ap_type(enum ofono_gprs_context_type type)
 		_(OFONO_GPRS_CONTEXT_TYPE_MMS);
 		_(OFONO_GPRS_CONTEXT_TYPE_WAP);
 		_(OFONO_GPRS_CONTEXT_TYPE_IMS);
-		_(OFONO_GPRS_CONTEXT_TYPE_IA);
 	}
 
 	return "OFONO_GPRS_CONTEXT_TYPE_<UNKNOWN>";
@@ -86,6 +107,7 @@ static GQuark mbpi_error_quark(void)
 
 void mbpi_ap_free(struct ofono_gprs_provision_data *ap)
 {
+	g_free(ap->provider_name);
 	g_free(ap->name);
 	g_free(ap->apn);
 	g_free(ap->username);
@@ -110,7 +132,7 @@ static void mbpi_g_set_error(GMarkupParseContext *context, GError **error,
 
 	va_end(ap);
 
-	g_prefix_error(error, "%s:%d ", MBPI_DATABASE, line_number);
+	g_prefix_error(error, "%s:%d ", mbpi_database, line_number);
 }
 
 static void text_handler(GMarkupParseContext *context,
@@ -119,6 +141,7 @@ static void text_handler(GMarkupParseContext *context,
 {
 	char **string = userdata;
 
+	g_free(*string);
 	*string = g_strndup(text, text_len);
 }
 
@@ -129,6 +152,39 @@ static const GMarkupParser text_parser = {
 	NULL,
 	NULL,
 };
+
+static void protocol_start(GMarkupParseContext *context,
+			const gchar **attribute_names,
+			const gchar **attribute_values,
+			enum ofono_gprs_proto *proto,
+			GError **error)
+{
+	const char *text = NULL;
+	int i;
+
+	for (i = 0; attribute_names[i]; i++)
+		if (g_str_equal(attribute_names[i], "type") == TRUE)
+			text = attribute_values[i];
+
+	if (text == NULL) {
+		mbpi_g_set_error(context, error, G_MARKUP_ERROR,
+					G_MARKUP_ERROR_MISSING_ATTRIBUTE,
+					"Missing attribute: type");
+		return;
+	}
+
+	if (strcmp(text, "ip") == 0)
+		*proto = OFONO_GPRS_PROTO_IP;
+	else if (strcmp(text, "ipv6") == 0)
+		*proto = OFONO_GPRS_PROTO_IPV6;
+	else if (strcmp(text, "ipv4v6") == 0)
+		*proto = OFONO_GPRS_PROTO_IPV4V6;
+	else
+		mbpi_g_set_error(context, error, G_MARKUP_ERROR,
+					G_MARKUP_ERROR_UNKNOWN_ATTRIBUTE,
+					"Unknown authentication method: %s",
+					text);
+}
 
 static void authentication_start(GMarkupParseContext *context,
 			const gchar **attribute_names,
@@ -154,6 +210,10 @@ static void authentication_start(GMarkupParseContext *context,
 		*auth_method = OFONO_GPRS_AUTH_METHOD_CHAP;
 	else if (strcmp(text, "pap") == 0)
 		*auth_method = OFONO_GPRS_AUTH_METHOD_PAP;
+	else if (strcmp(text, "any") == 0)
+		*auth_method = OFONO_GPRS_AUTH_METHOD_ANY;
+	else if (strcmp(text, "none") == 0)
+		*auth_method = OFONO_GPRS_AUTH_METHOD_NONE;
 	else
 		mbpi_g_set_error(context, error, G_MARKUP_ERROR,
 					G_MARKUP_ERROR_UNKNOWN_ATTRIBUTE,
@@ -164,7 +224,7 @@ static void authentication_start(GMarkupParseContext *context,
 static void usage_start(GMarkupParseContext *context,
 			const gchar **attribute_names,
 			const gchar **attribute_values,
-			enum ofono_gprs_context_type *type, GError **error)
+			struct ofono_gprs_provision_data *apn, GError **error)
 {
 	const char *text = NULL;
 	int i;
@@ -180,12 +240,14 @@ static void usage_start(GMarkupParseContext *context,
 		return;
 	}
 
-	if (strcmp(text, "internet") == 0)
-		*type = OFONO_GPRS_CONTEXT_TYPE_INTERNET;
-	else if (strcmp(text, "mms") == 0)
-		*type = OFONO_GPRS_CONTEXT_TYPE_MMS;
-	else if (strcmp(text, "wap") == 0)
-		*type = OFONO_GPRS_CONTEXT_TYPE_WAP;
+	if (strcmp(text, "internet") == 0) {
+		apn->type = OFONO_GPRS_CONTEXT_TYPE_INTERNET;
+		apn->proto = mbpi_default_internet_proto;
+	} else if (strcmp(text, "mms") == 0) {
+		apn->type = OFONO_GPRS_CONTEXT_TYPE_MMS;
+		apn->proto = mbpi_default_mms_proto;
+	} else if (strcmp(text, "wap") == 0)
+		apn->type = OFONO_GPRS_CONTEXT_TYPE_WAP;
 	else
 		mbpi_g_set_error(context, error, G_MARKUP_ERROR,
 					G_MARKUP_ERROR_UNKNOWN_ATTRIBUTE,
@@ -207,6 +269,9 @@ static void apn_start(GMarkupParseContext *context, const gchar *element_name,
 	else if (g_str_equal(element_name, "password"))
 		g_markup_parse_context_push(context, &text_parser,
 						&apn->password);
+	else if (g_str_equal(element_name, "protocol"))
+		protocol_start(context, attribute_names,
+				attribute_values, &apn->proto, error);
 	else if (g_str_equal(element_name, "authentication"))
 		authentication_start(context, attribute_names,
 				attribute_values, &apn->auth_method, error);
@@ -218,7 +283,7 @@ static void apn_start(GMarkupParseContext *context, const gchar *element_name,
 						&apn->message_proxy);
 	else if (g_str_equal(element_name, "usage"))
 		usage_start(context, attribute_names, attribute_values,
-				&apn->type, error);
+				apn, error);
 }
 
 static void apn_end(GMarkupParseContext *context, const gchar *element_name,
@@ -324,10 +389,13 @@ static void apn_handler(GMarkupParseContext *context, struct gsm_data *gsm,
 	}
 
 	ap = g_new0(struct ofono_gprs_provision_data, 1);
+	ap->provider_name = g_strdup(gsm->provider_name);
+	ap->provider_primary = gsm->provider_primary;
+
 	ap->apn = g_strdup(apn);
 	ap->type = OFONO_GPRS_CONTEXT_TYPE_INTERNET;
-	ap->proto = OFONO_GPRS_PROTO_IP;
-	ap->auth_method = OFONO_GPRS_AUTH_METHOD_CHAP;
+	ap->proto = mbpi_default_proto;
+	ap->auth_method = OFONO_GPRS_AUTH_METHOD_UNSPECIFIED;
 
 	g_markup_parse_context_push(context, &apn_parser, ap);
 }
@@ -397,6 +465,17 @@ static void gsm_end(GMarkupParseContext *context, const gchar *element_name,
 	if (ap == NULL)
 		return;
 
+	/* Fix the authentication method if none was specified */
+	if (ap->auth_method == OFONO_GPRS_AUTH_METHOD_UNSPECIFIED) {
+		if ((!ap->username || !ap->username[0]) &&
+				(!ap->password || !ap->password[0])) {
+			/* No username or password => no authentication */
+			ap->auth_method = OFONO_GPRS_AUTH_METHOD_NONE;
+		} else {
+			ap->auth_method = mbpi_default_auth_method;
+		}
+	}
+
 	if (gsm->allow_duplicates == FALSE) {
 		GSList *l;
 
@@ -415,9 +494,7 @@ static void gsm_end(GMarkupParseContext *context, const gchar *element_name,
 		}
 	}
 
-	if (gsm->match_type == OFONO_GPRS_CONTEXT_TYPE_ANY ||
-			gsm->match_type == ap->type)
-		gsm->apns = g_slist_append(gsm->apns, ap);
+	gsm->apns = g_slist_append(gsm->apns, ap);
 }
 
 static const GMarkupParser gsm_parser = {
@@ -493,27 +570,68 @@ static const GMarkupParser provider_parser = {
 	NULL,
 };
 
-static void toplevel_gsm_start(GMarkupParseContext *context,
+static void gsm_provider_start(GMarkupParseContext *context,
 					const gchar *element_name,
-					const gchar **atribute_names,
+					const gchar **attribute_names,
 					const gchar **attribute_values,
 					gpointer userdata, GError **error)
 {
 	struct gsm_data *gsm = userdata;
 
-	if (g_str_equal(element_name, "gsm")) {
+	if (g_str_equal(element_name, "name")) {
+		g_free(gsm->provider_name);
+		gsm->provider_name = NULL;
+		g_markup_parse_context_push(context, &text_parser,
+						&gsm->provider_name);
+	} else if (g_str_equal(element_name, "gsm")) {
 		gsm->match_found = FALSE;
 		g_markup_parse_context_push(context, &gsm_parser, gsm);
 	} else if (g_str_equal(element_name, "cdma"))
 		g_markup_parse_context_push(context, &skip_parser, NULL);
 }
 
+static void gsm_provider_end(GMarkupParseContext *context,
+					const gchar *element_name,
+					gpointer userdata, GError **error)
+{
+	if (g_str_equal(element_name, "name") ||
+				g_str_equal(element_name, "gsm") ||
+				g_str_equal(element_name, "cdma"))
+		g_markup_parse_context_pop(context);
+}
+
+static const GMarkupParser gsm_provider_parser = {
+	gsm_provider_start,
+	gsm_provider_end,
+	NULL,
+	NULL,
+	NULL,
+};
+
+static void toplevel_gsm_start(GMarkupParseContext *context,
+					const gchar *element_name,
+					const gchar **attribute_names,
+					const gchar **attribute_values,
+					gpointer userdata, GError **error)
+{
+	struct gsm_data *gsm = userdata;
+
+	if (g_str_equal(element_name, "provider")) {
+		g_markup_collect_attributes(element_name, attribute_names,
+				attribute_values, error,
+				G_MARKUP_COLLECT_BOOLEAN | G_MARKUP_COLLECT_OPTIONAL,
+				"primary", &gsm->provider_primary,
+				G_MARKUP_COLLECT_INVALID);
+
+		g_markup_parse_context_push(context, &gsm_provider_parser, gsm);
+	}
+}
+
 static void toplevel_gsm_end(GMarkupParseContext *context,
 					const gchar *element_name,
 					gpointer userdata, GError **error)
 {
-	if (g_str_equal(element_name, "gsm") ||
-			g_str_equal(element_name, "cdma"))
+	if (g_str_equal(element_name, "provider"))
 		g_markup_parse_context_pop(context);
 }
 
@@ -527,7 +645,7 @@ static const GMarkupParser toplevel_gsm_parser = {
 
 static void toplevel_cdma_start(GMarkupParseContext *context,
 					const gchar *element_name,
-					const gchar **atribute_names,
+					const gchar **attribute_names,
 					const gchar **attribute_values,
 					gpointer userdata, GError **error)
 {
@@ -567,11 +685,11 @@ static gboolean mbpi_parse(const GMarkupParser *parser, gpointer userdata,
 	GMarkupParseContext *context;
 	gboolean ret;
 
-	fd = open(MBPI_DATABASE, O_RDONLY);
+	fd = open(mbpi_database, O_RDONLY);
 	if (fd < 0) {
 		g_set_error(error, G_FILE_ERROR,
 				g_file_error_from_errno(errno),
-				"open(%s) failed: %s", MBPI_DATABASE,
+				"open(%s) failed: %s", mbpi_database,
 				g_strerror(errno));
 		return FALSE;
 	}
@@ -580,7 +698,7 @@ static gboolean mbpi_parse(const GMarkupParser *parser, gpointer userdata,
 		close(fd);
 		g_set_error(error, G_FILE_ERROR,
 				g_file_error_from_errno(errno),
-				"fstat(%s) failed: %s", MBPI_DATABASE,
+				"fstat(%s) failed: %s", mbpi_database,
 				g_strerror(errno));
 		return FALSE;
 	}
@@ -590,7 +708,7 @@ static gboolean mbpi_parse(const GMarkupParser *parser, gpointer userdata,
 		close(fd);
 		g_set_error(error, G_FILE_ERROR,
 				g_file_error_from_errno(errno),
-				"mmap(%s) failed: %s", MBPI_DATABASE,
+				"mmap(%s) failed: %s", mbpi_database,
 				g_strerror(errno));
 		return FALSE;
 	}
@@ -612,7 +730,6 @@ static gboolean mbpi_parse(const GMarkupParser *parser, gpointer userdata,
 }
 
 GSList *mbpi_lookup_apn(const char *mcc, const char *mnc,
-			enum ofono_gprs_context_type type,
 			gboolean allow_duplicates, GError **error)
 {
 	struct gsm_data gsm;
@@ -621,7 +738,6 @@ GSList *mbpi_lookup_apn(const char *mcc, const char *mnc,
 	memset(&gsm, 0, sizeof(gsm));
 	gsm.match_mcc = mcc;
 	gsm.match_mnc = mnc;
-	gsm.match_type = type;
 	gsm.allow_duplicates = allow_duplicates;
 
 	if (mbpi_parse(&toplevel_gsm_parser, &gsm, error) == FALSE) {
@@ -632,6 +748,7 @@ GSList *mbpi_lookup_apn(const char *mcc, const char *mnc,
 		gsm.apns = NULL;
 	}
 
+	g_free(gsm.provider_name);
 	return gsm.apns;
 }
 

@@ -3,7 +3,7 @@
  *  RIL library with GLib integration
  *
  *  Copyright (C) 2008-2011  Intel Corporation. All rights reserved.
- *  Copyright (C) 2012	Canonical Ltd.
+ *  Copyright (C) 2012  Canonical Ltd.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2 as
@@ -44,27 +44,6 @@
 
 static char temp_str[32];
 
-const char *ril_ofono_protocol_to_ril_string(guint protocol)
-{
-	char *result;
-
-	switch (protocol) {
-	case OFONO_GPRS_PROTO_IPV6:
-		result = PROTO_IPV6_STR;
-		break;
-	case OFONO_GPRS_PROTO_IPV4V6:
-		result = PROTO_IPV4V6_STR;
-		break;
-	case OFONO_GPRS_PROTO_IP:
-		result = PROTO_IP_STR;
-		break;
-	default:
-		result = NULL;
-	}
-
-	return result;
-}
-
 int ril_protocol_string_to_ofono_protocol(gchar *protocol_str)
 {
 	int result;
@@ -79,79 +58,6 @@ int ril_protocol_string_to_ofono_protocol(gchar *protocol_str)
 		result = -1;
 
 	return result;
-}
-
-const char *ril_appstate_to_string(int app_state)
-{
-	switch (app_state) {
-	case RIL_APPSTATE_UNKNOWN:
-		return "UNKNOWN";
-	case RIL_APPSTATE_DETECTED:
-		return "DETECTED";
-	case RIL_APPSTATE_PIN:
-		return "PIN";
-	case RIL_APPSTATE_PUK:
-		return "PUK";
-	case RIL_APPSTATE_SUBSCRIPTION_PERSO:
-		return "";
-	case RIL_APPSTATE_READY:
-		return "READY";
-	default:
-		return "<INVALID>";
-	}
-}
-
-const char *ril_apptype_to_string(int app_type)
-{
-
-	switch (app_type) {
-	case RIL_APPTYPE_UNKNOWN:
-		return "UNKNOWN";
-	case RIL_APPTYPE_SIM:
-		return "SIM";
-	case RIL_APPTYPE_USIM:
-		return "USIM";
-	case RIL_APPTYPE_RUIM:
-		return "RUIM";
-	case RIL_APPTYPE_CSIM:
-		return "CSIM";
-	case RIL_APPTYPE_ISIM:
-		return "ISIM";
-	default:
-		return "<INVALID>";
-	}
-}
-
-const char *ril_authtype_to_string(int auth_type)
-{
-	switch (auth_type) {
-	case RIL_AUTH_NONE:
-		return "NONE";
-	case RIL_AUTH_PAP:
-		return "PAP";
-	case RIL_AUTH_CHAP:
-		return "CHAP";
-	case RIL_AUTH_BOTH:
-		return "BOTH";
-	case RIL_AUTH_ANY:
-		return "ANY";
-	default:
-		return "<INVALID>";
-	}
-}
-
-const char *ril_cardstate_to_string(int card_state)
-{
-	switch (card_state) {
-	case RIL_CARDSTATE_ABSENT:
-		return "ABSENT";
-	case RIL_CARDSTATE_PRESENT:
-		return "PRESENT";
-	case RIL_CARDSTATE_ERROR:
-		return "ERROR";
-	default:
-		return "<INVALID>";
-	}
 }
 
 const char *ril_error_to_string(int error)
@@ -191,26 +97,6 @@ const char *ril_error_to_string(int error)
 	}
 }
 
-const char *ril_pinstate_to_string(int pin_state)
-{
-	switch (pin_state) {
-	case RIL_PINSTATE_UNKNOWN:
-		return "UNKNOWN";
-	case RIL_PINSTATE_ENABLED_NOT_VERIFIED:
-		return "ENABLED_NOT_VERIFIED";
-	case RIL_PINSTATE_ENABLED_VERIFIED:
-		return "ENABLED_VERIFIED";
-	case RIL_PINSTATE_DISABLED:
-		return "DISABLED";
-	case RIL_PINSTATE_ENABLED_BLOCKED:
-		return "ENABLED_BLOCKED";
-	case RIL_PINSTATE_ENABLED_PERM_BLOCKED:
-		return "ENABLED_PERM_BLOCKED";
-	default:
-		return "<INVALID>";
-	}
-}
-
 const char *ril_radio_state_to_string(int radio_state)
 {
 	switch (radio_state) {
@@ -228,77 +114,6 @@ const char *ril_radio_state_to_string(int radio_state)
 		return "ON";
 	default:
 		return "<INVALID>";
-	}
-}
-
-const char *ril_radio_tech_to_string(int radio_tech)
-{
-	switch (radio_tech) {
-	case RADIO_TECH_UNKNOWN:
-		return "UNKNOWN";
-	case RADIO_TECH_GPRS:
-		return "GPRS";
-	case RADIO_TECH_EDGE:
-		return	"EDGE";
-	case RADIO_TECH_UMTS:
-		return "UMTS";
-	case RADIO_TECH_IS95A:
-		return "IS95A";
-	case RADIO_TECH_IS95B:
-		return "IS95B";
-	case RADIO_TECH_1xRTT:
-		return "1xRTT";
-	case RADIO_TECH_EVDO_0:
-		return "EVDO_0";
-	case RADIO_TECH_EVDO_A:
-		return "EVDO_A";
-	case RADIO_TECH_HSDPA:
-		return "HSDPA";
-	case RADIO_TECH_HSUPA:
-		return "HSUPA";
-	case RADIO_TECH_HSPA:
-		return "HSPA";
-	case RADIO_TECH_EVDO_B:
-		return "EVDO_B";
-	case RADIO_TECH_EHRPD:
-		return "EHRPD";
-	case RADIO_TECH_LTE:
-		return "LTE";
-	case RADIO_TECH_HSPAP:
-		return "HSPAP";
-	case RADIO_TECH_GSM:
-		return "GSM";
-	case RADIO_TECH_TD_SCDMA:
-		return "TD_SCDMA";
-	case RADIO_TECH_IWLAN:
-		return "IWLAN";
-	case MTK_RADIO_TECH_HSDPAP:
-		return "MTK_HSDPAP";
-	case MTK_RADIO_TECH_HSDPAP_UPA:
-		return "MTK_HSDPAP_UPA";
-	case MTK_RADIO_TECH_HSUPAP:
-		return "MTK_HSUPAP";
-	case MTK_RADIO_TECH_HSUPAP_DPA:
-		return "MTK_HSUPAP_DPA";
-	case MTK_RADIO_TECH_DC_DPA:
-		return "MTK_DC_DPA";
-	case MTK_RADIO_TECH_DC_UPA:
-		return "MTK_DC_UPA";
-	case MTK_RADIO_TECH_DC_HSDPAP:
-		return "MTK_DC_HSDPAP";
-	case MTK_RADIO_TECH_DC_HSDPAP_UPA:
-		return "MTK_DC_HSDPAP_UPA";
-	case MTK_RADIO_TECH_DC_HSDPAP_DPA:
-		return "MTK_DC_HSDPAP_DPA";
-	case MTK_RADIO_TECH_DC_HSPAP:
-		return "MTK_DC_HSPAP";
-	default:
-		if (g_snprintf(temp_str, sizeof(temp_str),
-				"<INVALID (%d)>",
-				radio_tech))
-			return temp_str;
-		else
-			return "<INVALID>";
 	}
 }
 
@@ -519,56 +334,12 @@ const char *ril_request_id_to_string(int req)
 		return "RIL_REQUEST_ACKNOWLEDGE_INCOMING_GSM_SMS_WITH_PDU";
 	case RIL_REQUEST_STK_SEND_ENVELOPE_WITH_STATUS:
 		return "RIL_REQUEST_STK_SEND_ENVELOPE_WITH_STATUS";
+	case RIL_REQUEST_GET_CELL_INFO_LIST:
+		return "RIL_REQUEST_GET_CELL_INFO_LIST";
 	case RIL_REQUEST_SET_INITIAL_ATTACH_APN:
 		return "RIL_REQUEST_SET_INITIAL_ATTACH_APN";
-	case RIL_REQUEST_IMS_REGISTRATION_STATE:
-		return "RIL_REQUEST_IMS_REGISTRATION_STATE";
-	case RIL_REQUEST_IMS_SEND_SMS:
-		return "RIL_REQUEST_IMS_SEND_SMS";
-	case RIL_REQUEST_SIM_TRANSMIT_APDU_BASIC:
-		return "RIL_REQUEST_SIM_TRANSMIT_APDU_BASIC";
-	case RIL_REQUEST_SIM_OPEN_CHANNEL:
-		return "RIL_REQUEST_SIM_OPEN_CHANNEL";
-	case RIL_REQUEST_SIM_CLOSE_CHANNEL:
-		return "RIL_REQUEST_SIM_CLOSE_CHANNEL";
-	case RIL_REQUEST_SIM_TRANSMIT_APDU_CHANNEL:
-		return "RIL_REQUEST_SIM_TRANSMIT_APDU_CHANNEL";
-	case RIL_REQUEST_NV_READ_ITEM:
-		return "RIL_REQUEST_NV_READ_ITEM";
-	case RIL_REQUEST_NV_WRITE_ITEM:
-		return "RIL_REQUEST_NV_WRITE_ITEM";
-	case RIL_REQUEST_NV_WRITE_CDMA_PRL:
-		return "RIL_REQUEST_NV_WRITE_CDMA_PRL";
-	case RIL_REQUEST_NV_RESET_CONFIG:
-		return "RIL_REQUEST_NV_RESET_CONFIG";
-	case RIL_REQUEST_SET_UICC_SUBSCRIPTION :
-		return "RIL_REQUEST_SET_UICC_SUBSCRIPTION ";
-	case RIL_REQUEST_ALLOW_DATA :
-		return "RIL_REQUEST_ALLOW_DATA ";
-	case RIL_REQUEST_GET_HARDWARE_CONFIG:
-		return "RIL_REQUEST_GET_HARDWARE_CONFIG";
-	case RIL_REQUEST_SIM_AUTHENTICATION:
-		return "RIL_REQUEST_SIM_AUTHENTICATION";
-	case RIL_REQUEST_GET_DC_RT_INFO:
-		return "RIL_REQUEST_GET_DC_RT_INFO";
-	case RIL_REQUEST_SET_DC_RT_INFO_RATE:
-		return "RIL_REQUEST_SET_DC_RT_INFO_RATE";
-	case RIL_REQUEST_SET_DATA_PROFILE:
-		return "RIL_REQUEST_SET_DATA_PROFILE";
-	case RIL_REQUEST_SHUTDOWN:
-		return "RIL_REQUEST_SHUTDOWN";
-	case RIL_REQUEST_GET_RADIO_CAPABILITY:
-		return "RIL_REQUEST_GET_RADIO_CAPABILITY";
-	case RIL_REQUEST_SET_RADIO_CAPABILITY:
-		return "RIL_REQUEST_SET_RADIO_CAPABILITY";
-	case RIL_REQUEST_START_LCE:
-		return "RIL_REQUEST_START_LCE";
-	case RIL_REQUEST_STOP_LCE:
-		return "RIL_REQUEST_STOP_LCE";
-	case RIL_REQUEST_PULL_LCEDATA:
-		return "RIL_REQUEST_PULL_LCEDATA";
-	case RIL_REQUEST_GET_ACTIVITY_INFO:
-		return "RIL_REQUEST_GET_ACTIVITY_INFO";
+	case RIL_REQUEST_SET_UNSOL_CELL_INFO_LIST_RATE:
+		return "RIL_REQUEST_SET_UNSOL_CELL_INFO_LIST_RATE";
 	default:
 		return "<INVALID>";
 	}
@@ -647,30 +418,10 @@ const char *ril_unsol_request_to_string(int request)
 		return "UNSOL_EXIT_EMERGENCY_CALLBACK_MODE";
 	case RIL_UNSOL_RIL_CONNECTED:
 		return "UNSOL_RIL_CONNECTED";
-	case RIL_UNSOL_VOICE_RADIO_TECH_CHANGED:
-		return "RIL_UNSOL_VOICE_RADIO_TECH_CHANGED";
 	case RIL_UNSOL_CELL_INFO_LIST:
 		return "RIL_UNSOL_CELL_INFO_LIST";
-	case RIL_UNSOL_RESPONSE_IMS_NETWORK_STATE_CHANGED:
-		return "RIL_UNSOL_RESPONSE_IMS_NETWORK_STATE_CHANGED";
-	case RIL_UNSOL_UICC_SUBSCRIPTION_STATUS_CHANGED:
-		return "RIL_UNSOL_UICC_SUBSCRIPTION_STATUS_CHANGED";
-	case RIL_UNSOL_SRVCC_STATE_NOTIFY:
-		return "RIL_UNSOL_SRVCC_STATE_NOTIFY";
-	case RIL_UNSOL_HARDWARE_CONFIG_CHANGED:
-		return "RIL_UNSOL_HARDWARE_CONFIG_CHANGED";
-	case RIL_UNSOL_DC_RT_INFO_CHANGED:
-		return "RIL_UNSOL_DC_RT_INFO_CHANGED";
-	case RIL_UNSOL_RADIO_CAPABILITY:
-		return "RIL_UNSOL_RADIO_CAPABILITY";
-	case RIL_UNSOL_ON_SS:
-		return "RIL_UNSOL_ON_SS";
-	case RIL_UNSOL_STK_CC_ALPHA_NOTIFY:
-		return "RIL_UNSOL_STK_CC_ALPHA_NOTIFY";
-	case RIL_UNSOL_LCEDATA_RECV:
-		return "RIL_UNSOL_LCEDATA_RECV";
 	default:
-		return "<unknown event>";
+		return "<unknown request>";
 	}
 }
 
@@ -731,38 +482,6 @@ const char *ril_pdp_fail_to_string(int status)
 			return temp_str;
 		else
 			return "<UNKNOWN>";
-	}
-}
-
-const char *ril_rc_phase_to_string(int phase)
-{
-	switch (phase) {
-	case RIL_RC_PHASE_CONFIGURED:
-		return "RIL_RC_PHASE_CONFIGURED";
-	case RIL_RC_PHASE_START:
-		return "RIL_RC_PHASE_START";
-	case RIL_RC_PHASE_APPLY:
-		return "RIL_RC_PHASE_APPLY";
-	case RIL_RC_PHASE_UNSOL_RSP:
-		return "RIL_RC_PHASE_UNSOL_RSP";
-	case RIL_RC_PHASE_FINISH:
-		return "RIL_RC_PHASE_FINISH";
-	default:
-		return "<UNKNOWN RC PHASE>";
-	}
-}
-
-const char *ril_rc_status_to_string(int status)
-{
-	switch (status) {
-	case RIL_RC_STATUS_NONE:
-		return "RC_STATUS_NONE";
-	case RIL_RC_STATUS_SUCCESS:
-		return "RC_STATUS_SUCCESS";
-	case RIL_RC_STATUS_FAIL:
-		return "RC_STATUS_FAIL";
-	default:
-		return "<UNKNOWN RC STATUS>";
 	}
 }
 

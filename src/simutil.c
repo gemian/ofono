@@ -73,8 +73,6 @@ static struct sim_ef_info ef_db[] = {
 {	0x2F05, ROOTMF, ROOTMF, EF, BINARY, 0,		ALW,	PIN	},
 {	0x2FE2, ROOTMF, ROOTMF, EF, BINARY, 10,		ALW,	NEV	},
 {	0x4F20, 0x5F50, 0x5F50, EF, BINARY, 0,		PIN,	ADM	},
-{	0x4F30, 0x5F3A, 0x5F3A, EF, RECORD, 0,		PIN,	ADM	},
-{	0x5F3A, 0x7F10, 0x7F10, DF, 0, 0,		PIN,	PIN	},
 {	0x5F50, 0x7F10, 0x7F10, DF, 0, 0,		PIN,	ADM	},
 {	0x6F05, 0x7F20, 0x7FFF, EF, BINARY, 0,		ALW,	PIN	},
 {	0x6F07, 0x7F20, 0x7FFF, EF, BINARY, 9,		PIN,	ADM	},
@@ -89,7 +87,6 @@ static struct sim_ef_info ef_db[] = {
 {	0x6F38, 0x7F20, 0x7FFF, EF, BINARY, 0,		PIN,	ADM	},
 {	0x6F3A, 0x7F10, 0x7F10, EF, RECORD, 0,		PIN,	PIN	},
 {	0x6F3B, 0x7F10, 0x7FFF, EF, RECORD, 0,		PIN,	PIN2	},
-{	0x6F3E, 0x7F20, 0x7FFF, EF, BINARY, 0,		PIN,	ADM	},
 {	0x6F40, 0x7F10, 0x7FFF, EF, RECORD, 0,		PIN,	PIN	},
 {	0x6F45, 0x7F20, 0x7FFF, EF, BINARY, 0,		PIN,	PIN	},
 {	0x6F46, 0x7F20, 0x7FFF, EF, BINARY, 17,		ALW,	ADM	},
@@ -98,6 +95,7 @@ static struct sim_ef_info ef_db[] = {
 {	0x6F4D, 0x7F20, 0x7FFF, EF, RECORD, 0,		PIN,	PIN2	},
 {	0x6F50, 0x7F20, 0x7FFF, EF, BINARY, 0,		PIN,	PIN	},
 {	0x6F56, 0x0000, 0x7FFF, EF, BINARY, 0,		PIN,	PIN2	},
+{	0x6F57,	0x7F20,	0x7FFF,	EF, BINARY, 0,		PIN,	PIN2	},
 {	0x6FAD, 0x7F20, 0x7FFF, EF, BINARY, 0,		ALW,	ADM	},
 {	0x6FAE, 0x7F20, 0x0000, EF, BINARY, 1,		ALW,	ADM	},
 {	0x6FB7, 0x7F20, 0x7FFF, EF, BINARY, 0,		ALW,	ADM	},
@@ -982,8 +980,7 @@ void sim_spdi_free(struct sim_spdi *spdi)
 	if (spdi == NULL)
 		return;
 
-	g_slist_foreach(spdi->operators, (GFunc)g_free, NULL);
-	g_slist_free(spdi->operators);
+	g_slist_free_full(spdi->operators, g_free);
 	g_free(spdi);
 }
 
@@ -1090,8 +1087,7 @@ void sim_eons_free(struct sim_eons *eons)
 
 	g_free(eons->pnn_list);
 
-	g_slist_foreach(eons->opl_list, (GFunc)g_free, NULL);
-	g_slist_free(eons->opl_list);
+	g_slist_free_full(eons->opl_list, g_free);
 
 	g_free(eons);
 }
@@ -1104,9 +1100,6 @@ static const struct sim_eons_operator_info *
 	GSList *l;
 	const struct opl_operator *opl;
 	int i;
-
-	if (eons == NULL)
-		return NULL;
 
 	for (l = eons->opl_list; l; l = l->next) {
 		opl = l->data;

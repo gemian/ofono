@@ -123,8 +123,8 @@ typedef void (*ofono_sim_pin_retries_cb_t)(const struct ofono_error *error,
 typedef void (*ofono_sim_lock_unlock_cb_t)(const struct ofono_error *error,
 					void *data);
 
-typedef void (*ofono_sim_locked_cb_t)(const struct ofono_error *error,
-					int locked, void *data);
+typedef void (*ofono_query_facility_lock_cb_t)(const struct ofono_error *error,
+					ofono_bool_t status, void *data);
 
 struct ofono_sim_driver {
 	const char *name;
@@ -175,9 +175,9 @@ struct ofono_sim_driver {
 	void (*lock)(struct ofono_sim *sim, enum ofono_sim_password_type type,
 			int enable, const char *passwd,
 			ofono_sim_lock_unlock_cb_t cb, void *data);
-	void (*query_locked)(struct ofono_sim *sim,
-			enum ofono_sim_password_type type,
-			ofono_sim_locked_cb_t cb, void *data);
+	void (*query_facility_lock)(struct ofono_sim *sim,
+			enum ofono_sim_password_type lock,
+			ofono_query_facility_lock_cb_t cb, void *data);
 };
 
 int ofono_sim_driver_register(const struct ofono_sim_driver *d);
@@ -218,16 +218,30 @@ ofono_bool_t ofono_sim_add_spn_watch(struct ofono_sim *sim, unsigned int *id,
 					ofono_sim_spn_cb_t cb, void *data,
 					ofono_destroy_func destroy);
 
-ofono_bool_t ofono_sim_remove_spn_watch(struct ofono_sim *sim,
-							unsigned int *id);
+ofono_bool_t ofono_sim_remove_spn_watch(struct ofono_sim *sim, unsigned int *id);
+
+typedef void (*ofono_sim_iccid_event_cb_t)(const char *iccid, void *data);
+
+unsigned int ofono_sim_add_iccid_watch(struct ofono_sim *sim,
+				ofono_sim_iccid_event_cb_t cb, void *data,
+				ofono_destroy_func destroy);
+
+void ofono_sim_remove_iccid_watch(struct ofono_sim *sim, unsigned int id);
+
+typedef void (*ofono_sim_imsi_event_cb_t)(const char *imsi, void *data);
+
+unsigned int ofono_sim_add_imsi_watch(struct ofono_sim *sim,
+				ofono_sim_imsi_event_cb_t cb, void *data,
+				ofono_destroy_func destroy);
+
+void ofono_sim_remove_imsi_watch(struct ofono_sim *sim, unsigned int id);
 
 void ofono_sim_inserted_notify(struct ofono_sim *sim, ofono_bool_t inserted);
 
 struct ofono_sim_context *ofono_sim_context_create(struct ofono_sim *sim);
 void ofono_sim_context_free(struct ofono_sim_context *context);
 
-/*
- * This will queue an operation to read all available records with id from the
+/* This will queue an operation to read all available records with id from the
  * SIM.  Callback cb will be called every time a record has been read, or once
  * if an error has occurred.  For transparent files, the callback will only
  * be called once.
