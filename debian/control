@@ -19,6 +19,7 @@ Build-Depends: debhelper (>= 9),
                libglibutil-dev,
                libgrilio-dev,
                libmce-glib-dev,
+               libwspcodec-dev
 Standards-Version: 4.1.1
 Homepage: http://www.ofono.org/
 Vcs-Git: https://github.com/gemian/ofono.git
