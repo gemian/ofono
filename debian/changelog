@@ -1,4 +1,4 @@
-ofono (1.21+gemian) buster; urgency=medium
+ofono (1.21+gemian1) buster; urgency=medium
 
   * Branched for Gemian
   * Updated to sailfish ofono branch
