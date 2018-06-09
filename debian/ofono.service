@@ -5,9 +5,14 @@ Requires=dbus.service
 After=dbus.service
 
 [Service]
-Restart=on-failure
+Type=dbus
+Environment="OFONO_ARGS=--noplugin=he910,dun_gw_bluez5,hfp_bluez5,hfp_ag_bluez5,cdma_provision,bluez5,isimodem,n900,u8500,qmimodem,gobi,cdmamodem,isiusb,nwmodem,ztemodem,iceramodem,uaweimodem,calypsomodem,swmodem,mbmmodem,hsomodem,ifxmodem,stemodem,dunmodem,hfpmodem,speedupmodem,phonesim,telitmodem,udev,udevng"
 BusName=org.ofono
-ExecStart=/usr/sbin/ofonod -P ril --nodetach
+User=root
+ExecStart=/usr/sbin/ofonod -n --nobacktrace $OFONO_ARGS $OFONO_DEBUG
+Restart=on-failure
+RestartSec=3
+
 
 [Install]
 WantedBy=multi-user.target
