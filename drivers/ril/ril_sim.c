@@ -1,7 +1,7 @@
 /*
  *  oFono - Open Source Telephony - RIL-based devices
  *
- *  Copyright (C) 2015-2018 Jolla Ltd.
+ *  Copyright (C) 2015-2019 Jolla Ltd.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2 as
@@ -18,7 +18,8 @@
 #include "ril_util.h"
 #include "ril_log.h"
 
-#include "sailfish_watch.h"
+#include <ofono/watch.h>
+
 #include "simutil.h"
 #include "util.h"
 #include "ofono.h"
@@ -92,7 +93,7 @@ struct ril_sim {
 	const char *log_prefix;
 	char *allocated_log_prefix;
 
-	struct sailfish_watch *watch;
+	struct ofono_watch *watch;
 	gulong sim_state_watch_id;
 
 	/* query_passwd_state context */
@@ -273,11 +274,6 @@ static void ril_sim_pin_req_done(gpointer ptr)
 		GASSERT(!cbd->card_status_id);
 		ril_sim_pin_cbd_free(cbd);
 	}
-}
-
-static const char *ril_sim_app_id(struct ril_sim *sd)
-{
-	return sd->card->app ? sd->card->app->aid : NULL;
 }
 
 int ril_sim_app_type(struct ofono_sim *sim)
@@ -504,7 +500,8 @@ static void ril_sim_request_io(struct ril_sim *sd, guint cmd, int fileid,
 	GRilIoRequest *req = grilio_request_new();
 
 	DBG_(sd, "cmd=0x%.2X,efid=0x%.4X,%d,%d,%d,%s,pin2=(null),aid=%s",
-			cmd, fileid, p1, p2, p3, hex_data, ril_sim_app_id(sd));
+					cmd, fileid, p1, p2, p3, hex_data,
+					ril_sim_card_app_aid(sd->card));
 
 	grilio_request_append_int32(req, cmd);
 	grilio_request_append_int32(req, fileid);
@@ -514,7 +511,7 @@ static void ril_sim_request_io(struct ril_sim *sd, guint cmd, int fileid,
 	grilio_request_append_int32(req, p3);       /* P3 */
 	grilio_request_append_utf8(req, hex_data);  /* data; only for writes */
 	grilio_request_append_utf8(req, NULL);      /* pin2; only for writes */
-	grilio_request_append_utf8(req, ril_sim_app_id(sd));
+	grilio_request_append_utf8(req, ril_sim_card_app_aid(sd->card));
 
 	grilio_request_set_blocking(req, TRUE);
 	grilio_request_set_timeout(req, SIM_IO_TIMEOUT_SECS * 1000);
@@ -680,7 +677,7 @@ static void ril_sim_read_imsi(struct ofono_sim *sim, ofono_sim_imsi_cb_t cb,
 				void *data)
 {
 	struct ril_sim *sd = ril_sim_get_data(sim);
-	const char *app_id = ril_sim_app_id(sd);
+	const char *app_id = ril_sim_card_app_aid(sd->card);
 	struct ril_sim_cbd_io *cbd = ril_sim_cbd_io_new(sd, cb, data);
 	GRilIoRequest *req = grilio_request_array_utf8_new(1, app_id);
 
@@ -876,7 +873,7 @@ static void ril_sim_status_changed_cb(struct ril_sim_card *sc, void *user_data)
 	}
 }
 
-static void ril_sim_state_changed_cb(struct sailfish_watch *watch, void *data)
+static void ril_sim_state_changed_cb(struct ofono_watch *watch, void *data)
 {
 	struct ril_sim *sd = data;
 	const enum ofono_sim_state state = ofono_sim_get_state(watch->sim);
@@ -902,25 +899,22 @@ static int ril_sim_parse_retry_count(const void *data, guint len)
 static GRilIoRequest *ril_sim_enter_sim_pin_req(struct ril_sim *sd,
 							const char *pin)
 {
-	if (sd->card->app) {
-		/*
-		 * If there's no AID then so be it... Some
-		 * adaptations (namely, MTK) don't provide it
-		 * but don't seem to require it either.
-		 */
-		GRilIoRequest *req = grilio_request_array_utf8_new(2,
-						pin, sd->card->app->aid);
+	/*
+	 * If there's no AID then so be it... Some
+	 * adaptations (namely, MTK) don't provide it
+	 * but don't seem to require it either.
+	 */
+	GRilIoRequest *req = grilio_request_array_utf8_new(2, pin,
+					ril_sim_card_app_aid(sd->card));
 
-		grilio_request_set_blocking(req, TRUE);
-		return req;
-	}
-	return NULL;
+	grilio_request_set_blocking(req, TRUE);
+	return req;
 }
 
 static GRilIoRequest *ril_sim_enter_sim_puk_req(struct ril_sim *sd,
 					const char *puk, const char *pin)
 {
-	const char *app_id = ril_sim_app_id(sd);
+	const char *app_id = ril_sim_card_app_aid(sd->card);
 	if (app_id) {
 		GRilIoRequest *req = grilio_request_array_utf8_new(3,
 							puk, pin, app_id);
@@ -1222,7 +1216,7 @@ static void ril_sim_pin_send(struct ofono_sim *sim, const char *passwd,
 	GRilIoRequest *req = ril_sim_enter_sim_pin_req(sd, passwd);
 
 	if (req) {
-		DBG_(sd, "%s,aid=%s", passwd, ril_sim_app_id(sd));
+		DBG_(sd, "%s,aid=%s", passwd, ril_sim_card_app_aid(sd->card));
 		grilio_queue_send_request_full(sd->q, req,
 			RIL_REQUEST_ENTER_SIM_PIN, ril_sim_pin_change_state_cb,
 			ril_sim_pin_req_done, ril_sim_pin_cbd_new(sd,
@@ -1249,10 +1243,7 @@ static guint ril_perso_change_state(struct ofono_sim *sim,
 	case OFONO_SIM_PASSWORD_PHNET_PIN:
 		if (!enable) {
 			code = RIL_REQUEST_ENTER_NETWORK_DEPERSONALIZATION;
-			req = grilio_request_sized_new(12);
-			grilio_request_append_int32(req,
-					RIL_PERSOSUBSTATE_SIM_NETWORK);
-			grilio_request_append_utf8(req, passwd);
+			req = grilio_request_array_utf8_new(1, passwd);
 		} else {
 			DBG_(sd, "Not supported, enable=%d", enable);
 		}
@@ -1301,7 +1292,7 @@ static void ril_sim_pin_change_state(struct ofono_sim *sim,
 	const char *passwd, ofono_sim_lock_unlock_cb_t cb, void *data)
 {
 	struct ril_sim *sd = ril_sim_get_data(sim);
-	const char *app_id = ril_sim_app_id(sd);
+	const char *app_id = ril_sim_card_app_aid(sd->card);
 	const char *type_str = ril_sim_facility_code(passwd_type);
 	struct ofono_error error;
 	guint id = 0;
@@ -1339,7 +1330,7 @@ static void ril_sim_pin_send_puk(struct ofono_sim *sim,
 
 	if (req) {
 		DBG_(sd, "puk=%s,pin=%s,aid=%s", puk, passwd,
-							ril_sim_app_id(sd));
+					ril_sim_card_app_aid(sd->card));
 		grilio_queue_send_request_full(sd->q, req,
 			RIL_REQUEST_ENTER_SIM_PUK, ril_sim_pin_change_state_cb,
 			ril_sim_pin_req_done, ril_sim_pin_cbd_new(sd,
@@ -1359,7 +1350,7 @@ static void ril_sim_change_passwd(struct ofono_sim *sim,
 				ofono_sim_lock_unlock_cb_t cb, void *data)
 {
 	struct ril_sim *sd = ril_sim_get_data(sim);
-	const char *app_id = ril_sim_app_id(sd);
+	const char *app_id = ril_sim_card_app_aid(sd->card);
 	GRilIoRequest *req = grilio_request_array_utf8_new(3,
 					old_passwd, new_passwd, app_id);
 
@@ -1411,7 +1402,7 @@ static void ril_sim_query_facility_lock(struct ofono_sim *sim,
 	const char *type_str = ril_sim_facility_code(type);
 	struct ril_sim_cbd_io *cbd = ril_sim_cbd_io_new(sd, cb, data);
 	GRilIoRequest *req = grilio_request_array_utf8_new(4,
-			type_str, "", "0" /* class */, ril_sim_app_id(sd));
+		type_str, "", "0" /* class */, ril_sim_card_app_aid(sd->card));
 
 	/* Make sure that this request gets completed sooner or later */
 	grilio_request_set_timeout(req, FAC_LOCK_QUERY_TIMEOUT_SECS * 1000);
@@ -1455,7 +1446,7 @@ static gboolean ril_sim_register(gpointer user)
 		ril_sim_card_add_app_changed_handler(sd->card,
 					ril_sim_app_changed_cb, sd);
 	sd->sim_state_watch_id =
-		sailfish_watch_add_sim_state_changed_handler(sd->watch,
+		ofono_watch_add_sim_state_changed_handler(sd->watch,
 					ril_sim_state_changed_cb, sd);
 
 	/* And RIL events */
@@ -1480,7 +1471,7 @@ static int ril_sim_probe(struct ofono_sim *sim, unsigned int vendor,
 	sd->io = grilio_channel_ref(ril_modem_io(modem));
 	sd->card = ril_sim_card_ref(modem->sim_card);
 	sd->q = grilio_queue_new(sd->io);
-	sd->watch = sailfish_watch_new(ril_modem_get_path(modem));
+	sd->watch = ofono_watch_new(ril_modem_get_path(modem));
 
 	if (modem->log_prefix && modem->log_prefix[0]) {
 		sd->log_prefix = sd->allocated_log_prefix =
@@ -1518,8 +1509,8 @@ static void ril_sim_remove(struct ofono_sim *sim)
 			sd->query_passwd_state_sim_status_refresh_id);
 	}
 
-	sailfish_watch_remove_handler(sd->watch, sd->sim_state_watch_id);
-	sailfish_watch_unref(sd->watch);
+	ofono_watch_remove_handler(sd->watch, sd->sim_state_watch_id);
+	ofono_watch_unref(sd->watch);
 
 	ril_sim_card_remove_handlers(sd->card, sd->card_event_id,
 					G_N_ELEMENTS(sd->card_event_id));

@@ -34,6 +34,9 @@
 #define PROTO_IPV6_STR "IPV6"
 #define PROTO_IPV4V6_STR "IPV4V6"
 
+/* Yes, it does sometimes take minutes in roaming */
+#define SETUP_DATA_CALL_TIMEOUT (300*1000) /* ms */
+
 enum ril_data_priv_flags {
 	RIL_DATA_FLAG_NONE = 0x00,
 	RIL_DATA_FLAG_ALLOWED = 0x01,
@@ -76,6 +79,12 @@ enum ril_data_priv_flags {
 typedef GObjectClass RilDataClass;
 typedef struct ril_data RilData;
 
+enum ril_data_io_event_id {
+	IO_EVENT_DATA_CALL_LIST_CHANGED,
+	IO_EVENT_RESTRICTED_STATE_CHANGED,
+	IO_EVENT_COUNT
+};
+
 enum ril_data_settings_event_id {
 	SETTINGS_EVENT_IMSI_CHANGED,
 	SETTINGS_EVENT_PREF_MODE,
@@ -94,8 +103,10 @@ struct ril_data_priv {
 	struct ril_radio *radio;
 	struct ril_network *network;
 	struct ril_data_manager *dm;
-	enum ril_data_priv_flags flags;
 	struct ril_vendor_hook *vendor_hook;
+
+	enum ril_data_priv_flags flags;
+	enum ril_restricted_state restricted_state;
 
 	struct ril_data_request *req_queue;
 	struct ril_data_request *pending_req;
@@ -104,8 +115,9 @@ struct ril_data_priv {
 	guint slot;
 	char *log_prefix;
 	guint query_id;
-	gulong io_event_id;
+	gulong io_event_id[IO_EVENT_COUNT];
 	gulong settings_event_id[SETTINGS_EVENT_COUNT];
+	GHashTable* grab;
 };
 
 enum ril_data_signal {
@@ -177,7 +189,7 @@ struct ril_data_request_allow_data {
 
 static void ril_data_manager_check_data(struct ril_data_manager *dm);
 static void ril_data_manager_check_network_mode(struct ril_data_manager *dm);
-
+static void ril_data_call_deact_cid(struct ril_data *data, int cid);
 static void ril_data_power_update(struct ril_data *self);
 static void ril_data_signal_emit(struct ril_data *self, enum ril_data_signal id)
 {
@@ -537,6 +549,10 @@ struct ril_data_call *ril_data_call_find(struct ril_data_call_list *list,
 static void ril_data_set_calls(struct ril_data *self,
 					struct ril_data_call_list *list)
 {
+	struct ril_data_priv *priv = self->priv;
+	GHashTableIter it;
+	gpointer key;
+
 	if (!ril_data_call_list_equal(self->data_calls, list)) {
 		DBG("data calls changed");
 		ril_data_call_list_free(self->data_calls);
@@ -544,6 +560,63 @@ static void ril_data_set_calls(struct ril_data *self,
 		ril_data_signal_emit(self, SIGNAL_CALLS_CHANGED);
 	} else {
 		ril_data_call_list_free(list);
+	}
+
+	/* Clean up the grab table */
+	g_hash_table_iter_init(&it, priv->grab);
+	while (g_hash_table_iter_next(&it, &key, NULL)) {
+		const int cid = GPOINTER_TO_INT(key);
+
+		if (!ril_data_call_find(self->data_calls, cid)) {
+			g_hash_table_iter_remove(&it);
+		}
+	}
+
+	if (self->data_calls) {
+		GSList *l;
+
+		/* Disconnect stray calls (one at a time) */
+		for (l = self->data_calls->calls; l; l = l->next) {
+			struct ril_data_call *dc = l->data;
+
+			key = GINT_TO_POINTER(dc->cid);
+			if (!g_hash_table_contains(priv->grab, key)) {
+				DBG_(self, "stray call %u", dc->cid);
+				ril_data_call_deact_cid(self, dc->cid);
+				break;
+			}
+		}
+	}
+}
+
+static void ril_data_check_allowed(struct ril_data *self, gboolean was_allowed)
+{
+	if (ril_data_allowed(self) != was_allowed) {
+		ril_data_signal_emit(self, SIGNAL_ALLOW_CHANGED);
+	}
+}
+
+static void ril_data_restricted_state_changed_cb(GRilIoChannel *io, guint event,
+				const void *data, guint len, void *user_data)
+{
+	struct ril_data *self = RIL_DATA(user_data);
+	GRilIoParser rilp;
+	guint32 count, state;
+
+	GASSERT(event == RIL_UNSOL_RESTRICTED_STATE_CHANGED);
+	grilio_parser_init(&rilp, data, len);
+	if (grilio_parser_get_uint32(&rilp, &count) && count == 1 &&
+				grilio_parser_get_uint32(&rilp, &state) &&
+				grilio_parser_at_end(&rilp)) {
+		struct ril_data_priv *priv = self->priv;
+
+		if (priv->restricted_state != state) {
+			const gboolean was_allowed = ril_data_allowed(self);
+
+			DBG_(self, "restricted state 0x%02x", state);
+			priv->restricted_state = state;
+			ril_data_check_allowed(self, was_allowed);
+		}
 	}
 }
 
@@ -908,6 +981,7 @@ static gboolean ril_data_call_setup_submit(struct ril_data_request *req)
 	}
 
 	GASSERT(!req->pending_id);
+	grilio_request_set_timeout(ioreq, SETUP_DATA_CALL_TIMEOUT);
 	req->pending_id = grilio_queue_send_request_full(priv->q, ioreq,
 			RIL_REQUEST_SETUP_DATA_CALL, ril_data_call_setup_cb,
 			NULL, setup);
@@ -1044,6 +1118,11 @@ static struct ril_data_request *ril_data_call_deact_new(struct ril_data *data,
 	return req;
 }
 
+static void ril_data_call_deact_cid(struct ril_data *data, int cid)
+{
+	ril_data_request_queue(ril_data_call_deact_new(data, cid, NULL, NULL));
+}
+
 /*==========================================================================*
  * ril_data_allow_request
  *==========================================================================*/
@@ -1070,9 +1149,7 @@ static void ril_data_allow_cb(GRilIoChannel *io, int ril_status,
 			DBG_(data, "data off");
 		}
 
-		if (ril_data_allowed(data) != was_allowed) {
-			ril_data_signal_emit(data, SIGNAL_ALLOW_CHANGED);
-		}
+		ril_data_check_allowed(data, was_allowed);
 	}
 
 	ril_data_request_finish(req);
@@ -1188,9 +1265,15 @@ struct ril_data *ril_data_new(struct ril_data_manager *dm, const char *name,
 		priv->radio = ril_radio_ref(radio);
 		priv->network = ril_network_ref(network);
 		priv->vendor_hook = ril_vendor_hook_ref(vendor_hook);
-		priv->io_event_id = grilio_channel_add_unsol_event_handler(io,
+
+		priv->io_event_id[IO_EVENT_DATA_CALL_LIST_CHANGED] =
+			grilio_channel_add_unsol_event_handler(io,
 				ril_data_call_list_changed_cb,
 				RIL_UNSOL_DATA_CALL_LIST_CHANGED, self);
+		priv->io_event_id[IO_EVENT_RESTRICTED_STATE_CHANGED] =
+			grilio_channel_add_unsol_event_handler(io,
+				ril_data_restricted_state_changed_cb,
+				RIL_UNSOL_RESTRICTED_STATE_CHANGED, self);
 
 		priv->settings_event_id[SETTINGS_EVENT_IMSI_CHANGED] =
 			ril_sim_settings_add_imsi_changed_handler(settings,
@@ -1264,6 +1347,8 @@ void ril_data_unref(struct ril_data *self)
 gboolean ril_data_allowed(struct ril_data *self)
 {
 	return G_LIKELY(self) &&
+		(self->priv->restricted_state &
+			RIL_RESTRICTED_STATE_PS_ALL) == 0 &&
 		(self->priv->flags &
 			(RIL_DATA_FLAG_ALLOWED | RIL_DATA_FLAG_ON)) ==
 			(RIL_DATA_FLAG_ALLOWED | RIL_DATA_FLAG_ON);
@@ -1278,9 +1363,7 @@ static void ril_data_deactivate_all(struct ril_data *self)
 			struct ril_data_call *call = l->data;
 			if (call->status == PDP_FAIL_NONE) {
 				DBG_(self, "deactivating call %u", call->cid);
-				ril_data_request_queue(
-					ril_data_call_deact_new(self,
-						call->cid, NULL, NULL));
+				ril_data_call_deact_cid(self, call->cid);
 			}
 		}
 	}
@@ -1348,9 +1431,7 @@ static void ril_data_disallow(struct ril_data *self)
 		ril_data_power_update(self);
 	}
 
-	if (ril_data_allowed(self) != was_allowed) {
-		ril_data_signal_emit(self, SIGNAL_ALLOW_CHANGED);
-	}
+	ril_data_check_allowed(self, was_allowed);
 }
 
 static void ril_data_max_speed_cb(gpointer data, gpointer max_speed)
@@ -1449,12 +1530,39 @@ struct ril_data_request *ril_data_call_deactivate(struct ril_data *self,
 	return req;
 }
 
+gboolean ril_data_call_grab(struct ril_data *self, int cid, void *cookie)
+{
+	if (self && cookie && ril_data_call_find(self->data_calls, cid)) {
+		struct ril_data_priv *priv = self->priv;
+		gpointer key = GINT_TO_POINTER(cid);
+		void *prev = g_hash_table_lookup(priv->grab, key);
+
+		if (!prev) {
+			g_hash_table_insert(priv->grab, key, cookie);
+			return TRUE;
+		} else {
+			return (prev == cookie);
+		}
+	}
+	return FALSE;
+}
+
+void ril_data_call_release(struct ril_data *self, int cid, void *cookie)
+{
+	if (self && cookie) {
+		struct ril_data_priv *priv = self->priv;
+
+		g_hash_table_remove(priv->grab, GUINT_TO_POINTER(cid));
+	}
+}
+
 static void ril_data_init(struct ril_data *self)
 {
 	struct ril_data_priv *priv = G_TYPE_INSTANCE_GET_PRIVATE(self,
 		RIL_DATA_TYPE, struct ril_data_priv);
 
 	self->priv = priv;
+	priv->grab = g_hash_table_new(g_direct_hash, g_direct_equal);
 }
 
 static void ril_data_dispose(GObject *object)
@@ -1468,7 +1576,7 @@ static void ril_data_dispose(GObject *object)
 
 	ril_sim_settings_remove_handlers(settings, priv->settings_event_id,
 					G_N_ELEMENTS(priv->settings_event_id));
-	grilio_channel_remove_handlers(priv->io, &priv->io_event_id, 1);
+	grilio_channel_remove_all_handlers(priv->io, priv->io_event_id);
 	grilio_queue_cancel_all(priv->q, FALSE);
 	priv->query_id = 0;
 
@@ -1482,6 +1590,7 @@ static void ril_data_dispose(GObject *object)
 
 	dm->data_list = g_slist_remove(dm->data_list, self);
 	ril_data_manager_check_data(dm);
+	g_hash_table_destroy(priv->grab);
 	G_OBJECT_CLASS(ril_data_parent_class)->dispose(object);
 }
 

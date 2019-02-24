@@ -1,7 +1,7 @@
 /*
  *  oFono - Open Source Telephony - RIL-based devices
  *
- *  Copyright (C) 2016-2018 Jolla Ltd.
+ *  Copyright (C) 2016-2019 Jolla Ltd.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License version 2 as
@@ -19,14 +19,15 @@
 #include "ril_data.h"
 #include "ril_log.h"
 
-#include "sailfish_watch.h"
-
 #include <grilio_channel.h>
 #include <grilio_parser.h>
 #include <grilio_request.h>
 #include <grilio_queue.h>
 
 #include <gutil_macros.h>
+#include <gutil_misc.h>
+
+#include <ofono/watch.h>
 
 #include "ofono.h"
 
@@ -56,7 +57,7 @@ struct ril_vendor_hook_mtk {
 	GRilIoQueue *q;
 	GRilIoChannel *io;
 	struct ril_network *network;
-	struct sailfish_watch *watch;
+	struct ofono_watch *watch;
 	guint set_initial_attach_apn_id;
 	gboolean initial_attach_apn_ok;
 	gulong network_event_id[NETWORK_EVENT_COUNT];
@@ -108,6 +109,7 @@ static const struct ril_mtk_msg msg_mtk1 = {
 static const struct ril_mtk_msg msg_mtk2 = {
 	.attach_apn_has_roaming_protocol = FALSE,
 	.request_resume_registration = 2065,
+	.request_set_call_indication = 2086,
 	.unsol_ps_network_state_changed = 3015,
 	.unsol_registration_suspended = 3024,
 	.unsol_incoming_call_indication = 3042,
@@ -241,7 +243,7 @@ static GRilIoRequest *ril_vendor_mtk_build_set_attach_apn_req
 static const struct ofono_gprs_primary_context *ril_vendor_mtk_internet_context
 					(struct ril_vendor_hook_mtk *self)
 {
-	struct sailfish_watch *watch = self->watch;
+	struct ofono_watch *watch = self->watch;
 
 	if (watch->imsi) {
 		struct ofono_atom *atom = __ofono_modem_find_atom(watch->modem,
@@ -306,7 +308,7 @@ static void ril_vendor_mtk_initial_attach_apn_reset
 	}
 }
 
-static void ril_vendor_mtk_watch_imsi_changed(struct sailfish_watch *watch,
+static void ril_vendor_mtk_watch_imsi_changed(struct ofono_watch *watch,
 							void *user_data)
 {
 	struct ril_vendor_hook_mtk *self = user_data;
@@ -349,60 +351,47 @@ static void ril_vendor_mtk_incoming_call_indication(GRilIoChannel *io, guint id,
 {
 	struct ril_vendor_hook_mtk *self = user_data;
 	const struct ril_mtk_msg *msg = self->msg;
-	GRilIoParser rilp;
-	int nparams;
-	gchar *call_id = NULL, *number = NULL;
-	gchar *type = NULL, *call_mode = NULL, *seq_no = NULL;
+	GRilIoRequest* req = NULL;
+
+	GASSERT(id == msg->unsol_incoming_call_indication);
 
 	if (msg->request_set_call_indication) {
-		GASSERT(id == msg->unsol_incoming_call_indication);
+		int nparams, cid, seq;
+		gchar *call_id = NULL, *seq_no = NULL;
+		GRilIoParser rilp;
+
 		grilio_parser_init(&rilp, data, len);
 
-		if (!grilio_parser_get_int32(&rilp, &nparams) || nparams < 5) {
-			DBG("unexpected params count");
-			return;
+		if (grilio_parser_get_int32(&rilp, &nparams) && nparams >= 5 &&
+			(call_id = grilio_parser_get_utf8(&rilp)) != NULL &&
+			grilio_parser_skip_string(&rilp) /* number */ &&
+			grilio_parser_skip_string(&rilp) /* type */ &&
+			grilio_parser_skip_string(&rilp) /* call_mode */ &&
+			(seq_no = grilio_parser_get_utf8(&rilp)) != NULL &&
+				gutil_parse_int(call_id, 10, &cid) &&
+				gutil_parse_int(seq_no, 10, &seq)) {
+
+			DBG("slot=%u,cid=%d,seq=%d", self->slot, cid, seq);
+			req = grilio_request_new();
+			grilio_request_append_int32(req, 3); /* Param count */
+			/* mode - IMS_ALLOW_INCOMING_CALL_INDICATION: */
+			grilio_request_append_int32(req, 0);
+			grilio_request_append_int32(req, cid);
+			grilio_request_append_int32(req, seq);
+		} else {
+			DBG("failed to parse INCOMING_CALL_INDICATION");
 		}
-
-		call_id = grilio_parser_get_utf8(&rilp);
-		if (!call_id) {
-			DBG("no call_id value returned!");
-			return;
-		}
-
-		number = grilio_parser_get_utf8(&rilp);
-		type = grilio_parser_get_utf8(&rilp);
-		call_mode = grilio_parser_get_utf8(&rilp);
-
-		seq_no = grilio_parser_get_utf8(&rilp);
-		if (!call_id) {
-			DBG("no seq_no value returned!");
-			g_free(call_id);
-			g_free(number);
-			g_free(type);
-			g_free(call_mode);
-			return;
-		}
-
-		DBG("slot=%u, call_id=%s, number=%s, type=%s, call_mode=%s, seq_no=%s",
-			self->slot, call_id, number, type, call_mode, seq_no);
-
-		GRilIoRequest* req = grilio_request_new();
-		grilio_request_append_int32(req, 3);
-		grilio_request_append_int32(req, 0); // mode - IMS_ALLOW_INCOMING_CALL_INDICATION
-		grilio_request_append_int32(req, atoi(call_id));
-		grilio_request_append_int32(req, atoi(seq_no));
-
-		grilio_queue_send_request(self->q, req,
-				msg->request_set_call_indication);
-		grilio_request_unref(req);
 
 		g_free(call_id);
-		g_free(number);
-		g_free(type);
-		g_free(call_mode);
 		g_free(seq_no);
+	}
+
+	if (req) {
+		grilio_queue_send_request(self->q, req,
+					msg->request_set_call_indication);
+		grilio_request_unref(req);
 	} else {
-		/* Ignore the payload, let ril_voicecall.c do its normal stuff */
+		/* Let ril_voicecall.c know that something happened */
 		grilio_channel_inject_unsol_event(io,
 				RIL_UNSOL_RESPONSE_CALL_STATE_CHANGED, NULL, 0);
 	}
@@ -516,11 +505,11 @@ static void ril_vendor_mtk_hook_init(struct ril_vendor_hook_mtk *self,
 	self->msg = mtk_driver_data->msg;
 	self->q = grilio_queue_new(io);
 	self->io = grilio_channel_ref(io);
-	self->watch = sailfish_watch_new(path);
+	self->watch = ofono_watch_new(path);
 	self->slot = config->slot;
 	self->network = ril_network_ref(network);
 	self->watch_event_id[WATCH_EVENT_IMSI_CHANGED] =
-			sailfish_watch_add_imsi_changed_handler(self->watch,
+			ofono_watch_add_imsi_changed_handler(self->watch,
 				ril_vendor_mtk_watch_imsi_changed, self);
 	self->network_event_id[NETWORK_EVENT_PREF_MODE_CHANGED] =
 			ril_network_add_pref_mode_changed_handler(self->network,
@@ -535,8 +524,8 @@ static void ril_vendor_mtk_destroy(struct ril_vendor_hook_mtk *self)
 	grilio_channel_remove_all_handlers(self->io, self->ril_event_id);
 	grilio_queue_unref(self->q);
 	grilio_channel_unref(self->io);
-	sailfish_watch_remove_all_handlers(self->watch, self->watch_event_id);
-	sailfish_watch_unref(self->watch);
+	ofono_watch_remove_all_handlers(self->watch, self->watch_event_id);
+	ofono_watch_unref(self->watch);
 	ril_network_remove_all_handlers(self->network, self->network_event_id);
 	ril_network_unref(self->network);
 }

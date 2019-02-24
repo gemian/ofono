@@ -56,6 +56,7 @@ enum ofono_error_type {
 	OFONO_ERROR_TYPE_CEER,
 	OFONO_ERROR_TYPE_SIM,
 	OFONO_ERROR_TYPE_FAILURE,
+	OFONO_ERROR_TYPE_ERRNO
 };
 
 enum ofono_disconnect_reason {
@@ -69,16 +70,6 @@ struct ofono_error {
 	enum ofono_error_type type;
 	int error;
 };
-
-#define OFONO_EINVAL(error) do {	        \
-	error->type = OFONO_ERROR_TYPE_FAILURE; \
-	error->error = -EINVAL;                 \
-} while (0)
-
-#define OFONO_NO_ERROR(error) do {	         \
-	error->type = OFONO_ERROR_TYPE_NO_ERROR; \
-	error->error = 0;                        \
-} while (0)
 
 #define OFONO_MAX_PHONE_NUMBER_LENGTH 80
 #define OFONO_MAX_CALLER_NAME_LENGTH 80

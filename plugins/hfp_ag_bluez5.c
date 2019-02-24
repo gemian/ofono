@@ -47,19 +47,18 @@ typedef struct GAtResult GAtResult;
 #include "bluez5.h"
 #include "bluetooth.h"
 
-#ifndef DBUS_TYPE_UNIX_FD
-#define DBUS_TYPE_UNIX_FD -1
-#endif
-
 #define HFP_AG_EXT_PROFILE_PATH   "/bluetooth/profile/hfp_ag"
 #define BT_ADDR_SIZE 18
 
 #define HFP_AG_DRIVER		"hfp-ag-driver"
 
+static gboolean hfp_ag_enabled;
+static guint service_watch_id;
 static guint modemwatch_id;
 static GList *modems;
 static GHashTable *sim_hash = NULL;
 static GHashTable *connection_hash;
+static struct ofono_emulator *emulator = NULL;
 
 static int hfp_card_probe(struct ofono_handsfree_card *card,
 					unsigned int vendor, void *data)
@@ -72,6 +71,8 @@ static int hfp_card_probe(struct ofono_handsfree_card *card,
 static void hfp_card_remove(struct ofono_handsfree_card *card)
 {
 	DBG("");
+
+	emulator = NULL;
 }
 
 static void codec_negotiation_done_cb(int err, void *data)
@@ -172,9 +173,9 @@ static DBusMessage *profile_new_connection(DBusConnection *conn,
 	struct sockaddr_rc saddr;
 	socklen_t optlen;
 	struct ofono_emulator *em;
-	struct ofono_modem *modem;
 	char local[BT_ADDR_SIZE], remote[BT_ADDR_SIZE];
 	struct ofono_handsfree_card *card;
+	GList *i;
 	int err;
 
 	DBG("Profile handler NewConnection");
@@ -202,7 +203,6 @@ static DBusMessage *profile_new_connection(DBusConnection *conn,
 		goto invalid;
 	}
 
-	/* Pick the first voicecall capable modem */
 	if (modems == NULL) {
 		close(fd);
 		return g_dbus_create_error(msg, BLUEZ_ERROR_INTERFACE
@@ -210,9 +210,7 @@ static DBusMessage *profile_new_connection(DBusConnection *conn,
 						"No voice call capable modem");
 	}
 
-	modem = modems->data;
-
-	DBG("Picked modem %p for emulator", modem);
+	DBG("Using all modems for emulator.");
 
 	memset(&saddr, 0, sizeof(saddr));
 	optlen = sizeof(saddr);
@@ -240,7 +238,7 @@ static DBusMessage *profile_new_connection(DBusConnection *conn,
 
 	bt_ba2str(&saddr.rc_bdaddr, remote);
 
-	em = ofono_emulator_create(modem, OFONO_EMULATOR_TYPE_HFP);
+	em = ofono_emulator_create(OFONO_EMULATOR_TYPE_HFP);
 	if (em == NULL) {
 		close(fd);
 		return g_dbus_create_error(msg, BLUEZ_ERROR_INTERFACE
@@ -248,6 +246,10 @@ static DBusMessage *profile_new_connection(DBusConnection *conn,
 						"Not enough resources");
 	}
 
+	for (i = modems; i; i = i->next)
+		ofono_emulator_add_modem(em, i->data);
+
+	emulator = em;
 	ofono_emulator_register(em, fd);
 
 	fd_dup = dup(fd);
@@ -367,6 +369,9 @@ static void sim_state_watch(enum ofono_sim_state new_state, void *data)
 
 	modems = g_list_append(modems, modem);
 
+	if (emulator)
+		ofono_emulator_add_modem(emulator, modem);
+
 	if (modems->next != NULL)
 		return;
 
@@ -459,29 +464,27 @@ static void call_modemwatch(struct ofono_modem *modem, void *user)
 	modem_watch(modem, TRUE, user);
 }
 
-static int hfp_ag_init(void)
+static void hfp_ag_enable(DBusConnection *conn)
 {
-	DBusConnection *conn = ofono_dbus_get_connection();
 	int err;
 
-	if (DBUS_TYPE_UNIX_FD < 0)
-		return -EBADF;
-
 	/* Registers External Profile handler */
-	if (!g_dbus_register_interface(conn, HFP_AG_EXT_PROFILE_PATH,
-					BLUEZ_PROFILE_INTERFACE,
-					profile_methods, NULL,
-					NULL, NULL, NULL)) {
+	if (!g_dbus_register_interface(conn,
+	                               HFP_AG_EXT_PROFILE_PATH,
+	                               BLUEZ_PROFILE_INTERFACE,
+	                               profile_methods,
+	                               NULL, NULL, NULL, NULL)) {
 		ofono_error("Register Profile interface failed: %s",
-						HFP_AG_EXT_PROFILE_PATH);
-		return -EIO;
+		            HFP_AG_EXT_PROFILE_PATH);
+		return;
 	}
 
 	err = ofono_handsfree_card_driver_register(&hfp_ag_driver);
 	if (err < 0) {
 		g_dbus_unregister_interface(conn, HFP_AG_EXT_PROFILE_PATH,
-						BLUEZ_PROFILE_INTERFACE);
-		return err;
+		                            BLUEZ_PROFILE_INTERFACE);
+		ofono_error("Failed to register driver: %d", err);
+		return;
 	}
 
 	sim_hash = g_hash_table_new(g_direct_hash, g_direct_equal);
@@ -490,9 +493,64 @@ static int hfp_ag_init(void)
 	__ofono_modem_foreach(call_modemwatch, NULL);
 
 	connection_hash = g_hash_table_new_full(g_str_hash, g_str_equal,
-					g_free, connection_destroy);
+	                                        g_free, connection_destroy);
 
 	ofono_handsfree_audio_ref();
+
+	hfp_ag_enabled = TRUE;
+}
+
+static void hfp_ag_disable(DBusConnection *conn)
+{
+	if (modemwatch_id) {
+		__ofono_modemwatch_remove(modemwatch_id);
+		modemwatch_id = 0;
+	}
+
+	if (connection_hash) {
+		g_hash_table_destroy(connection_hash);
+		connection_hash = NULL;
+	}
+
+	g_list_free(modems);
+	modems = NULL;
+
+	if (sim_hash) {
+		g_hash_table_foreach_remove(sim_hash, sim_watch_remove, NULL);
+		g_hash_table_destroy(sim_hash);
+		sim_hash = NULL;
+	}
+
+	if (hfp_ag_enabled) {
+		g_dbus_unregister_interface(conn, HFP_AG_EXT_PROFILE_PATH,
+		                            BLUEZ_PROFILE_INTERFACE);
+		ofono_handsfree_card_driver_unregister(&hfp_ag_driver);
+		ofono_handsfree_audio_unref();
+	}
+
+	hfp_ag_enabled = FALSE;
+}
+
+static void bluez_connect_cb(DBusConnection *connection, void *user_data)
+{
+	hfp_ag_enable(connection);
+}
+
+static void bluez_disconnect_cb(DBusConnection *connection, void *user_data)
+{
+	hfp_ag_disable(connection);
+}
+
+static int hfp_ag_init(void)
+{
+	DBusConnection *conn = ofono_dbus_get_connection();
+
+	hfp_ag_enable(conn);
+
+	service_watch_id = g_dbus_add_service_watch(conn, "org.bluez",
+	                                            bluez_connect_cb,
+	                                            bluez_disconnect_cb,
+	                                            NULL, NULL);
 
 	return 0;
 }
@@ -501,19 +559,12 @@ static void hfp_ag_exit(void)
 {
 	DBusConnection *conn = ofono_dbus_get_connection();
 
-	__ofono_modemwatch_remove(modemwatch_id);
-	g_dbus_unregister_interface(conn, HFP_AG_EXT_PROFILE_PATH,
-						BLUEZ_PROFILE_INTERFACE);
+	if (service_watch_id) {
+		g_dbus_remove_watch(conn, service_watch_id);
+		service_watch_id = 0;
+	}
 
-	ofono_handsfree_card_driver_unregister(&hfp_ag_driver);
-
-	g_hash_table_destroy(connection_hash);
-
-	g_list_free(modems);
-	g_hash_table_foreach_remove(sim_hash, sim_watch_remove, NULL);
-	g_hash_table_destroy(sim_hash);
-
-	ofono_handsfree_audio_unref();
+	hfp_ag_disable(conn);
 }
 
 OFONO_PLUGIN_DEFINE(hfp_ag_bluez5, "Hands-Free Audio Gateway Profile Plugins",
